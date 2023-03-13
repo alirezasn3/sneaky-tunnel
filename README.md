@@ -2,7 +2,7 @@
 This is reversed UDP tunnel, meaning the server will initiate the connection. The port on client side is opened using udp punch-holing.
 
 ## sample config.json for client
-```
+```json
 {
   "role": "client",
   "listenOn": "0.0.0.0:1194",
@@ -15,7 +15,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ```
 
 ## sample config.json for server
-```
+```json
 {
   "role": "server",
   "connectTo": "0.0.0.0:1194"
