@@ -1,0 +1,6 @@
+[submodule "negotiators/sneaky-tunnel-negotiator-worker"]
+	path = negotiators/sneaky-tunnel-negotiator-worker
+	url = https://github.com/alirezasn3/sneaky-tunnel-negotiator-worker.git
+[submodule "negotiators/sneaky-tunnel-negotiator-edge-functions"]
+	path = negotiators/sneaky-tunnel-negotiator-edge-functions
+	url = https://github.com/alirezasn3/sneaky-tunnel-negotiator-edge-functions.git
