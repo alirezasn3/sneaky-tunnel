@@ -1,0 +1,12 @@
+[Unit]
+Description=A very sneaky tunnel
+After=syslog.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+PIDFile=/run/sneaky-tunnel.pid
+ExecStart= /root/sneaky-tunnel/sneaky-tunnel /root/sneaky-tunnel/config.josn
+
+[Install]
+WantedBy=multi-user.target

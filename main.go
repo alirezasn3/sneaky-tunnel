@@ -30,7 +30,11 @@ func resolveAddress(adress string) *net.UDPAddr {
 }
 
 func init() {
-	bytes, err := os.ReadFile("config.json")
+	p := "config.json"
+	if len(os.Args) > 1 {
+		p = os.Args[1]
+	}
+	bytes, err := os.ReadFile(p)
 	handleError(err)
 	err = json.Unmarshal(bytes, &config)
 	handleError(err)
