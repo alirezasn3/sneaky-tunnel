@@ -22,3 +22,15 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "connectTo": "0.0.0.0:1194"
 }
 ```
+
+### TODOs list
+- [ ] add comments
+- [ ] add traffic monitoring
+- [ ] add better error handling
+- [ ] add https support for client requests
+- [ ] add systemd file and script
+- [ ] add sample openvpn config for client and server
+- [ ] add golang install script
+- [ ] add log file
+- [ ] improve flag packet logic
+- [ ] add diagram and explanation to readme
