@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -48,16 +47,8 @@ func (c *Client) SelectNegotiator() {
 	}
 }
 
-func (c *Client) FindUnusedPort() {
-	conn, err := net.ListenPacket("udp4", "0.0.0.0:")
-	handleError(err)
-	addrParts := strings.Split(conn.LocalAddr().String(), ":")
-	c.Port = addrParts[len(addrParts)-1]
-	conn.Close()
-	fmt.Printf("Port %s selected as the receiving port for UDP connection to server\n", c.Port)
-}
-
 func (c *Client) NegotiatePorts() {
+	c.Port = config.ClientPort
 	res, err := http.Get(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.Server, c.PublicIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
 	handleError(err)
 	if res.StatusCode != 200 {
@@ -71,11 +62,12 @@ func (c *Client) NegotiatePorts() {
 }
 
 func (c *Client) OpenPortAndSendDummyPacket() {
+	listenAddress := resolveAddress("0.0.0.0:" + c.Port)
 	remoteAddress := resolveAddress(config.Server + ":" + c.ServerPort)
-	conn, err := net.ListenPacket("udp4", "0.0.0.0:"+c.Port)
+	conn, err := net.DialUDP("udp", listenAddress, remoteAddress)
 	handleError(err)
 	fmt.Printf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String())
-	conn.WriteTo([]byte{0, 0}, remoteAddress)
+	conn.Write([]byte{0, 0})
 	conn.Close()
 }
 
@@ -101,12 +93,11 @@ func (c *Client) Start() {
 	localAddress := resolveAddress("0.0.0.0:" + c.Port)
 	listenAddress := resolveAddress(config.ListenOn)
 
-	/* conn, err := net.DialUDP("udp4", localAddress, remoteAddress) */
-	conn, err := net.ListenUDP("udp4", localAddress)
+	conn, err := net.DialUDP("udp", localAddress, remoteAddress)
 	handleError(err)
 	fmt.Printf("Listening on %s for dummy packet from %s\n", localAddress.String(), remoteAddress.String())
 
-	localConn, err := net.ListenUDP("udp4", listenAddress)
+	localConn, err := net.ListenUDP("udp", listenAddress)
 	handleError(err)
 	fmt.Printf("Listening on %s for local connections\n", localAddress.String())
 
@@ -135,8 +126,7 @@ func (c *Client) Start() {
 			packet.Flags = 0
 			packet.Payload = buffer[:n]
 			encodedPacketBytes = packet.EncodePacket()
-			/* _, err = conn.Write(encodedPacketBytes) */
-			_, err = conn.WriteToUDP(encodedPacketBytes, remoteAddress)
+			_, err = conn.Write(encodedPacketBytes)
 			handleError(err)
 		}
 	}()
@@ -156,6 +146,16 @@ func (c *Client) Start() {
 				continue
 			}
 			_, err = localConn.WriteTo(packet.Payload, c.Clients[packet.ID])
+			handleError(err)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		var err error
+		for {
+			time.Sleep(time.Second * 5)
+			_, err = conn.Write([]byte{1, 0})
 			handleError(err)
 		}
 	}()
