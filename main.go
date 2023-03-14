@@ -13,6 +13,7 @@ type Config struct {
 	ListenOn    string   `json:"listenOn"`
 	ConnectTo   string   `json:"connectTo"`
 	Server      string   `json:"server"`
+	ClientPort  string   `json:"clientPort"`
 	Negotiators []string `json:"negotiators"`
 }
 
@@ -40,7 +41,6 @@ func main() {
 		var c Client
 		c.GetPublicIP()
 		c.SelectNegotiator()
-		c.FindUnusedPort()
 		c.NegotiatePorts()
 		c.OpenPortAndSendDummyPacket()
 		c.Start()
