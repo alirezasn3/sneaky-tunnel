@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 PIDFile=/run/sneaky-tunnel.pid
-ExecStart= /root/sneaky-tunnel/sneaky-tunnel /root/sneaky-tunnel/config.josn
+ExecStart= /root/sneaky-tunnel/sneaky-tunnel /root/sneaky-tunnel/config.josn /root/sneaky-tunnel/logs.txt
 
 [Install]
 WantedBy=multi-user.target
