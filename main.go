@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 var config Config
@@ -61,6 +63,15 @@ func main() {
 
 	if config.Role == "client" {
 		var c Client
+
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		go func(*Client) {
+			<-sigs
+			c.CleanUp()
+			os.Exit(0)
+		}(&c)
+
 		c.GetPublicIP()
 		c.SelectNegotiator()
 		c.NegotiatePorts()

@@ -10,13 +10,14 @@ import (
 )
 
 type Client struct {
-	PublicIP          string
-	Negotiator        string
-	ServerPort        string
-	Port              string
-	Clients           map[byte]*net.UDPAddr
-	ClientConnections map[string]byte
-	Ready             bool
+	PublicIP           string
+	Negotiator         string
+	ServerPort         string
+	Port               string
+	Clients            map[byte]*net.UDPAddr
+	ClientConnections  map[string]byte
+	Ready              bool
+	ConnectionToServer *net.UDPConn
 }
 
 func (c *Client) GetPublicIP() {
@@ -93,7 +94,8 @@ func (c *Client) Start() {
 	localAddress := resolveAddress("0.0.0.0:" + c.Port)
 	listenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", config.AppPort))
 
-	conn, err := net.DialUDP("udp", localAddress, remoteAddress)
+	var err error
+	c.ConnectionToServer, err = net.DialUDP("udp", localAddress, remoteAddress)
 	handleError(err)
 	Log(fmt.Sprintf("Listening on %s for dummy packet from %s\n", localAddress.String(), remoteAddress.String()))
 
@@ -126,7 +128,7 @@ func (c *Client) Start() {
 			}
 			packet.Payload = buffer[:n]
 			encodedPacketBytes = packet.EncodePacket()
-			_, err = conn.Write(encodedPacketBytes)
+			_, err = c.ConnectionToServer.Write(encodedPacketBytes)
 			handleError(err)
 		}
 	}()
@@ -138,7 +140,7 @@ func (c *Client) Start() {
 		var packet Packet
 		var n int
 		for {
-			n, err = conn.Read(buffer)
+			n, err = c.ConnectionToServer.Read(buffer)
 			handleError(err)
 			packet.DecodePacket(buffer[:n])
 
@@ -158,10 +160,15 @@ func (c *Client) Start() {
 		var err error
 		for {
 			time.Sleep(time.Second * 5)
-			_, err = conn.Write([]byte{2, 0, 0, 0}) // keep-alive packet
+			_, err = c.ConnectionToServer.Write([]byte{2, 0, 0, 0}) // keep-alive packet
 			handleError(err)
 		}
 	}()
 
 	wg.Wait()
+}
+
+func (c *Client) CleanUp() {
+	c.ConnectionToServer.Write([]byte{3, 0, 0, 0}) // close connection packet
+	Log("Sent close connection packet to server")
 }
