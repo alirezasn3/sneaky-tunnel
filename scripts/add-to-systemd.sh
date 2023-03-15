@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo cp sneaky-tunnel.service /etc/systemd/system/sneaky-tunnel.service
+sudo cp ../sneaky-tunnel.service /etc/systemd/system/sneaky-tunnel.service
 sudo chmod 664 /etc/systemd/system/sneaky-tunnel.service
 sudo systemctl daemon-reload
 sudo systemctl start sneaky-tunnel
