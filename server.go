@@ -78,11 +78,22 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			Log(fmt.Sprintf("Error reading packet from %s\n%s\n", clientIPAndPort, err))
 			continue
 		}
+
+		// handle flags
 		packet.DecodePacket(buffer[:n])
-		if packet.Flags == 1 { // keep alive packet
-			s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
+		if packet.Flags > 0 {
+			if packet.Flags == 1 { // dummy
+				Log(fmt.Sprintf("Received dummy packet from %s\n", clientIPAndPort))
+			} else if packet.Flags == 2 { // keep-alive
+				s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
+			} else if packet.Flags == 3 { // close connection
+				Log(fmt.Sprintf("Received close connection packett from %s\n", clientIPAndPort))
+				shouldClose = true
+				break
+			}
 			continue
 		}
+
 		if connectionToLocalApp, ok := s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID]; ok {
 			_, err = connectionToLocalApp.Write(packet.Payload)
 			if err != nil {

@@ -67,7 +67,7 @@ func (c *Client) OpenPortAndSendDummyPacket() {
 	conn, err := net.DialUDP("udp", listenAddress, remoteAddress)
 	handleError(err)
 	Log(fmt.Sprintf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String()))
-	conn.Write([]byte{0, 0, 0, 0})
+	conn.Write([]byte{1, 0, 0, 0}) // dummy packet
 	conn.Close()
 }
 
@@ -110,6 +110,7 @@ func (c *Client) Start() {
 		defer wg.Done()
 		buffer := make([]byte, (1024*8)-4)
 		var packet Packet
+		packet.Flags = 0
 		var encodedPacketBytes []byte
 		var localAppAddress *net.UDPAddr
 		var n int
@@ -123,7 +124,6 @@ func (c *Client) Start() {
 				c.ClientConnections[localAppAddress.String()] = packet.ID
 				c.Clients[packet.ID] = localAppAddress
 			}
-			packet.Flags = 0
 			packet.Payload = buffer[:n]
 			encodedPacketBytes = packet.EncodePacket()
 			_, err = conn.Write(encodedPacketBytes)
@@ -141,10 +141,13 @@ func (c *Client) Start() {
 			n, err = conn.Read(buffer)
 			handleError(err)
 			packet.DecodePacket(buffer[:n])
-			if len(packet.Payload) == 0 {
+
+			// handle flags
+			if packet.Flags == 1 {
 				Log("received dummy packet from server\n")
 				continue
 			}
+
 			_, err = localConn.WriteTo(packet.Payload, c.Clients[packet.ID])
 			handleError(err)
 		}
@@ -155,7 +158,7 @@ func (c *Client) Start() {
 		var err error
 		for {
 			time.Sleep(time.Second * 5)
-			_, err = conn.Write([]byte{1, 0, 0, 0})
+			_, err = conn.Write([]byte{2, 0, 0, 0}) // keep-alive packet
 			handleError(err)
 		}
 	}()

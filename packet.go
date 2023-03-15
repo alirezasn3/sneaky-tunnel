@@ -1,5 +1,10 @@
 package main
 
+// flags:
+// 0 -> no flags
+// 1 -> dummy
+// 2 -> keep-alive
+// 3 -> close connection
 type Packet struct {
 	Payload         []byte // max length : 1024*8 - 1 - 1 - 2 = 8188
 	ID              byte   // length : 1

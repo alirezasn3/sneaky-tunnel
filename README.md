@@ -32,6 +32,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [ ] add sample openvpn config for client and server
 - [x] add golang install script
 - [x] add log file
-- [ ] improve flag packet logic
+- [x] improve flag packet logic
 - [ ] add diagram and explanation to readme
 - [x] add receiver app port on server to the Packet struct
+- [ ] add support for TCP over UDP
