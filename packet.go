@@ -1,19 +1,21 @@
 package main
 
 type Packet struct {
-	Payload []byte // max length : 1024*8 - 1 - 1
-	ID      byte   // length : 1
-	Flags   byte   // length : 1
-	Buffer  []byte // to avoid allocation for each packet
+	Payload         []byte // max length : 1024*8 - 1 - 1 - 2 = 8188
+	ID              byte   // length : 1
+	Flags           byte   // length : 1
+	DestinationPort uint16 // length : 2
+	Buffer          []byte // to avoid allocation for each packet
 }
 
 func (p *Packet) EncodePacket() []byte {
-	if len(p.Payload) > 8190 { // 8192 - 1 - 1
+	if len(p.Payload) > 8188 {
 		panic("payload was larger than 8190 bytes")
 	}
 	p.Buffer = []byte{}
 	p.Buffer = append(p.Buffer, p.Flags)
 	p.Buffer = append(p.Buffer, p.ID)
+	p.Buffer = append(p.Buffer, byte(p.DestinationPort), byte(p.DestinationPort>>8))
 	p.Buffer = append(p.Buffer, p.Payload...)
 	return p.Buffer
 }
@@ -21,5 +23,6 @@ func (p *Packet) EncodePacket() []byte {
 func (p *Packet) DecodePacket(bytes []byte) {
 	p.Flags = bytes[0]
 	p.ID = bytes[1]
-	p.Payload = bytes[2:]
+	p.DestinationPort = uint16(bytes[2]) | uint16(bytes[3])<<8
+	p.Payload = bytes[4:]
 }

@@ -5,9 +5,9 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ```json
 {
   "role": "client",
-  "listenOn": "0.0.0.0:1194",
-  "server": "1.2.3.4",
-  "clientPort": "12345",
+  "appPort": 1194,
+  "serverIP": "1.2.3.4",
+  "clientPort": "4567",
   "negotiators": [
     "http://reverse-tunnel.netlify.app",
     "http://rt.alirezasn.workers.dev"
@@ -19,7 +19,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ```json
 {
   "role": "server",
-  "connectTo": "0.0.0.0:1194"
+  "appPort": 1194
 }
 ```
 
@@ -34,4 +34,4 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [x] add log file
 - [ ] improve flag packet logic
 - [ ] add diagram and explanation to readme
-- [ ] add receiver app port on server to the Packet struct
+- [x] add receiver app port on server to the Packet struct

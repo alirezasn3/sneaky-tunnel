@@ -49,10 +49,10 @@ func (c *Client) SelectNegotiator() {
 
 func (c *Client) NegotiatePorts() {
 	c.Port = config.ClientPort
-	res, err := http.Get(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.Server, c.PublicIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := http.Get(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
 	handleError(err)
 	if res.StatusCode != 200 {
-		panic(fmt.Sprintf("GET %s/%s/%s:%s failed with status %d", c.Negotiator, config.Server, c.PublicIP, c.Port, res.StatusCode))
+		panic(fmt.Sprintf("GET %s/%s/%s:%s failed with status %d", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode))
 	}
 	portBytes, err := io.ReadAll(res.Body)
 	handleError(err)
@@ -63,11 +63,11 @@ func (c *Client) NegotiatePorts() {
 
 func (c *Client) OpenPortAndSendDummyPacket() {
 	listenAddress := resolveAddress("0.0.0.0:" + c.Port)
-	remoteAddress := resolveAddress(config.Server + ":" + c.ServerPort)
+	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	conn, err := net.DialUDP("udp", listenAddress, remoteAddress)
 	handleError(err)
 	Log(fmt.Sprintf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String()))
-	conn.Write([]byte{0, 0})
+	conn.Write([]byte{0, 0, 0, 0})
 	conn.Close()
 }
 
@@ -78,10 +78,10 @@ func (c *Client) AskServerToSendDummyPacket() {
 		Log(".")
 	}
 	Log("\n")
-	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.Server, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
 	handleError(err)
 	if res.StatusCode != 200 {
-		panic(fmt.Sprintf("POST %s/%s/%s:%s failed with status %d", c.Negotiator, config.Server, c.PublicIP, c.Port, res.StatusCode))
+		panic(fmt.Sprintf("POST %s/%s/%s:%s failed with status %d", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode))
 	}
 }
 
@@ -89,9 +89,9 @@ func (c *Client) Start() {
 	c.Clients = make(map[byte]*net.UDPAddr)
 	c.ClientConnections = make(map[string]byte)
 
-	remoteAddress := resolveAddress(config.Server + ":" + c.ServerPort)
+	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	localAddress := resolveAddress("0.0.0.0:" + c.Port)
-	listenAddress := resolveAddress(config.ListenOn)
+	listenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", config.AppPort))
 
 	conn, err := net.DialUDP("udp", localAddress, remoteAddress)
 	handleError(err)
@@ -99,7 +99,7 @@ func (c *Client) Start() {
 
 	localConn, err := net.ListenUDP("udp", listenAddress)
 	handleError(err)
-	Log(fmt.Sprintf("Listening on %s for local connections\n", localAddress.String()))
+	Log(fmt.Sprintf("Listening on %s for local connections\n", listenAddress.String()))
 
 	go c.AskServerToSendDummyPacket()
 
@@ -108,7 +108,7 @@ func (c *Client) Start() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		buffer := make([]byte, (1024*8)-2)
+		buffer := make([]byte, (1024*8)-4)
 		var packet Packet
 		var encodedPacketBytes []byte
 		var localAppAddress *net.UDPAddr
@@ -155,7 +155,7 @@ func (c *Client) Start() {
 		var err error
 		for {
 			time.Sleep(time.Second * 5)
-			_, err = conn.Write([]byte{1, 0})
+			_, err = conn.Write([]byte{1, 0, 0, 0})
 			handleError(err)
 		}
 	}()

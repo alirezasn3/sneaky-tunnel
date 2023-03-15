@@ -13,9 +13,8 @@ var logFile *os.File
 
 type Config struct {
 	Role        string   `json:"role"`
-	ListenOn    string   `json:"listenOn"`
-	ConnectTo   string   `json:"connectTo"`
-	Server      string   `json:"server"`
+	AppPort     uint16   `json:"appPort"`
+	ServerIP    string   `json:"serverIP"`
 	ClientPort  string   `json:"clientPort"`
 	Negotiators []string `json:"negotiators"`
 }

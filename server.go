@@ -56,13 +56,13 @@ func (s *Server) ListenForNegotiationRequests() {
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
-	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.Write([]byte{0, 0})
+	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.Write([]byte{0, 0, 0, 0})
 	handleError(err)
 	Log(fmt.Sprintf("Sent dummy packets to %s\n", clientIPAndPort))
 }
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
-	localAddress := resolveAddress(config.ConnectTo)
+	localAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", config.AppPort))
 	conn := s.ServerToClientConnections[clientIPAndPort].Connection
 	buffer := make([]byte, 1024*8)
 	var packet Packet
@@ -89,11 +89,11 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 				if shouldClose {
 					break
 				}
-				Log(fmt.Sprintf("Error writing packet to %s\n%s\n", config.ConnectTo, err))
+				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
 				continue
 			}
 		} else {
-			Log(fmt.Sprintln("Created new connection to local app"))
+			Log("Created new connection to local app\n")
 			if len(packet.Payload) == 0 {
 				continue
 			}
@@ -108,7 +108,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 				if shouldClose {
 					break
 				}
-				Log(fmt.Sprintf("Error writing packet to %s\n%s\n", config.ConnectTo, err))
+				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
 				continue
 			}
 
@@ -132,7 +132,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			}()
 
 			go func(id byte) {
-				buffer := make([]byte, (1024*8)-2)
+				buffer := make([]byte, (1024*8)-4)
 				var packet Packet
 				var encodedPacketBytes []byte
 				var n int
