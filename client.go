@@ -69,6 +69,7 @@ func (c *Client) OpenPortAndSendDummyPacket() {
 	handleError(err)
 	Log(fmt.Sprintf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String()))
 	conn.Write([]byte{1, 0, 0, 0}) // dummy packet
+	Log("Sent dummy packet to server\n")
 	conn.Close()
 }
 
@@ -146,7 +147,7 @@ func (c *Client) Start() {
 
 			// handle flags
 			if packet.Flags == 1 {
-				Log("received dummy packet from server\n")
+				Log("Received dummy packet from server\n")
 				continue
 			}
 
