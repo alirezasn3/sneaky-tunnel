@@ -26,20 +26,20 @@ func (c *Client) GetPublicIP() {
 	handleError(err)
 	res.Body.Close()
 	c.PublicIP = string(ipBytes)
-	fmt.Printf("Public IP: %s\n", ipBytes)
+	Log(fmt.Sprintf("Public IP: %s\n", ipBytes))
 }
 
 func (c *Client) SelectNegotiator() {
 	for i, negotiator := range config.Negotiators {
-		fmt.Printf("Testing negotiator: %s\n", negotiator)
+		Log(fmt.Sprintf("Testing negotiator: %s\n", negotiator))
 		res, err := http.Head(negotiator)
 		handleError(err)
 		if res.StatusCode == 200 {
 			c.Negotiator = negotiator
-			fmt.Printf("Negotitator selected: %s\n", negotiator)
+			Log(fmt.Sprintf("Negotitator selected: %s\n", negotiator))
 			break
 		} else {
-			fmt.Printf("%s did not respond to HEAD request with status 200\n", negotiator)
+			Log(fmt.Sprintf("%s did not respond to HEAD request with status 200\n", negotiator))
 		}
 		if i == len(config.Negotiators)-1 {
 			panic("Failed to select negotiator, none of them responded with 200 status.")
@@ -58,7 +58,7 @@ func (c *Client) NegotiatePorts() {
 	handleError(err)
 	res.Body.Close()
 	c.ServerPort = string(portBytes)
-	fmt.Printf("Negotiated server port: %s\n", portBytes)
+	Log(fmt.Sprintf("Negotiated server port: %s\n", portBytes))
 }
 
 func (c *Client) OpenPortAndSendDummyPacket() {
@@ -66,18 +66,18 @@ func (c *Client) OpenPortAndSendDummyPacket() {
 	remoteAddress := resolveAddress(config.Server + ":" + c.ServerPort)
 	conn, err := net.DialUDP("udp", listenAddress, remoteAddress)
 	handleError(err)
-	fmt.Printf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String())
+	Log(fmt.Sprintf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String()))
 	conn.Write([]byte{0, 0})
 	conn.Close()
 }
 
 func (c *Client) AskServerToSendDummyPacket() {
-	fmt.Print("Waiting 3 seconds before asking server for dummy packet")
+	Log("Waiting 3 seconds before asking server for dummy packet")
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
-		fmt.Print(".")
+		Log(".")
 	}
-	fmt.Println()
+	Log("\n")
 	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.Server, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
 	handleError(err)
 	if res.StatusCode != 200 {
@@ -95,11 +95,11 @@ func (c *Client) Start() {
 
 	conn, err := net.DialUDP("udp", localAddress, remoteAddress)
 	handleError(err)
-	fmt.Printf("Listening on %s for dummy packet from %s\n", localAddress.String(), remoteAddress.String())
+	Log(fmt.Sprintf("Listening on %s for dummy packet from %s\n", localAddress.String(), remoteAddress.String()))
 
 	localConn, err := net.ListenUDP("udp", listenAddress)
 	handleError(err)
-	fmt.Printf("Listening on %s for local connections\n", localAddress.String())
+	Log(fmt.Sprintf("Listening on %s for local connections\n", localAddress.String()))
 
 	go c.AskServerToSendDummyPacket()
 
@@ -142,7 +142,7 @@ func (c *Client) Start() {
 			handleError(err)
 			packet.DecodePacket(buffer[:n])
 			if len(packet.Payload) == 0 {
-				fmt.Println("received dummy packet from server")
+				Log("received dummy packet from server\n")
 				continue
 			}
 			_, err = localConn.WriteTo(packet.Payload, c.Clients[packet.ID])

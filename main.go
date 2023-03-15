@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net"
 	"os"
 )
 
 var config Config
+var logFile *os.File
 
 type Config struct {
 	Role        string   `json:"role"`
@@ -23,6 +26,11 @@ func handleError(e error) {
 	}
 }
 
+func Log(message string) {
+	log.Print(message)
+	fmt.Print(message)
+}
+
 func resolveAddress(adress string) *net.UDPAddr {
 	a, err := net.ResolveUDPAddr("udp", adress)
 	handleError(err)
@@ -30,17 +38,28 @@ func resolveAddress(adress string) *net.UDPAddr {
 }
 
 func init() {
-	p := "config.json"
+	cPath := "config.json"
 	if len(os.Args) > 1 {
-		p = os.Args[1]
+		cPath = os.Args[1]
 	}
-	bytes, err := os.ReadFile(p)
+	bytes, err := os.ReadFile(cPath)
 	handleError(err)
 	err = json.Unmarshal(bytes, &config)
 	handleError(err)
+
+	lPath := "logs.txt"
+	if len(os.Args) > 2 {
+		lPath = os.Args[2]
+	}
+	logFile, err = os.OpenFile(lPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	handleError(err)
+	log.SetOutput(logFile)
+	log.SetFlags(log.Ldate | log.Lshortfile)
 }
 
 func main() {
+	defer logFile.Close()
+
 	if config.Role == "client" {
 		var c Client
 		c.GetPublicIP()

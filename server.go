@@ -22,7 +22,7 @@ type Server struct {
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 	err := http.ListenAndServe("0.0.0.0:80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("%s %s\n", r.Method, r.URL.String())
+		Log(fmt.Sprintf("%s %s\n", r.Method, r.URL.String()))
 		if r.Method == "GET" {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
@@ -58,7 +58,7 @@ func (s *Server) ListenForNegotiationRequests() {
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
 	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.Write([]byte{0, 0})
 	handleError(err)
-	fmt.Printf("Sent dummy packets to %s\n", clientIPAndPort)
+	Log(fmt.Sprintf("Sent dummy packets to %s\n", clientIPAndPort))
 }
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
@@ -75,7 +75,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			if shouldClose {
 				break
 			}
-			fmt.Printf("Error reading packet from %s\n%s\n", clientIPAndPort, err)
+			Log(fmt.Sprintf("Error reading packet from %s\n%s\n", clientIPAndPort, err))
 			continue
 		}
 		packet.DecodePacket(buffer[:n])
@@ -89,11 +89,11 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 				if shouldClose {
 					break
 				}
-				fmt.Printf("Error writing packet to %s\n%s\n", config.ConnectTo, err)
+				Log(fmt.Sprintf("Error writing packet to %s\n%s\n", config.ConnectTo, err))
 				continue
 			}
 		} else {
-			fmt.Println("Created new connection to local app")
+			Log(fmt.Sprintln("Created new connection to local app"))
 			if len(packet.Payload) == 0 {
 				continue
 			}
@@ -108,20 +108,26 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 				if shouldClose {
 					break
 				}
-				fmt.Printf("Error writing packet to %s\n%s\n", config.ConnectTo, err)
+				Log(fmt.Sprintf("Error writing packet to %s\n%s\n", config.ConnectTo, err))
 				continue
 			}
 
+			s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
+
 			go func() {
 				for {
-					time.Sleep(time.Second * 10)
+					if shouldClose {
+						break
+					}
 					if time.Now().Unix()-s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime > 10 {
-						fmt.Printf("Client %s timed out, closing the connection\n", clientIPAndPort)
+						Log(fmt.Sprintf("Client %s timed out, closing the connection\n", clientIPAndPort))
 						shouldClose = true
 						s.ServerToClientConnections[clientIPAndPort].Connection.Close()
+						s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID].Close()
 						delete(s.ServerToClientConnections, clientIPAndPort)
-						return
+						break
 					}
+					time.Sleep(time.Second * 10)
 				}
 			}()
 
@@ -130,13 +136,14 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 				var packet Packet
 				var encodedPacketBytes []byte
 				var n int
+				var err error
 				for {
 					n, err = connectionToLocalApp.Read(buffer)
 					if err != nil {
 						if shouldClose {
 							break
 						}
-						fmt.Printf("Error reading packet from %s\n%s\n", localAddress, err)
+						Log(fmt.Sprintf("Error reading packet from %s\n%s\n", localAddress, err))
 						continue
 					}
 					packet.Flags = 0
@@ -148,7 +155,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 						if shouldClose {
 							break
 						}
-						fmt.Printf("Error writing packet to %s\n%s\n", conn.RemoteAddr().String(), err)
+						Log(fmt.Sprintf("Error writing packet to %s\n%s\n", conn.RemoteAddr().String(), err))
 						continue
 					}
 				}

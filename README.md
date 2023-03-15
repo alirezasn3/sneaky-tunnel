@@ -31,6 +31,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [x] add systemd file and script
 - [ ] add sample openvpn config for client and server
 - [x] add golang install script
-- [ ] add log file
+- [x] add log file
 - [ ] improve flag packet logic
 - [ ] add diagram and explanation to readme
+- [ ] add receiver app port on server to the Packet struct
