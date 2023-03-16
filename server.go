@@ -31,8 +31,9 @@ func (s *Server) ListenForNegotiationRequests() {
 				w.WriteHeader(400)
 				return
 			}
-			clientAddress := resolveAddress(clientIPAndPort)
-			conn, err := net.DialUDP("udp", nil, clientAddress)
+			// clientAddress := resolveAddress(clientIPAndPort)
+			lAddr := resolveAddress("0.0.0.0:0")
+			conn, err := net.ListenUDP("udp", lAddr)
 			handleError(err)
 			s.ServerToClientConnections[clientIPAndPort] = &User{}
 			s.ServerToClientConnections[clientIPAndPort].Ready = false
@@ -66,7 +67,8 @@ func (s *Server) ListenForNegotiationRequests() {
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
-	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.Write([]byte{1, 0, 0, 0})
+	clientAddress := resolveAddress(clientIPAndPort)
+	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, clientAddress)
 	handleError(err)
 	Log(fmt.Sprintf("Sent dummy packets to %s\n", clientIPAndPort))
 }
@@ -74,24 +76,25 @@ func (s *Server) SendDummyPacket(clientIPAndPort string) {
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	localAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", config.AppPort))
 	conn := s.ServerToClientConnections[clientIPAndPort].Connection
+	defer Log(fmt.Sprintf("Closed connection to %s\n", clientIPAndPort))
+	defer delete(s.ServerToClientConnections, clientIPAndPort)
+	defer conn.Close()
 	buffer := make([]byte, 1024*8)
 	var packet Packet
 	var n int
 	var err error
 	var shouldClose bool = false
+	var cAddr *net.UDPAddr
+mainLoop:
 	for {
-		n, err = conn.Read(buffer)
+		n, cAddr, err = conn.ReadFromUDP(buffer)
 		if err != nil {
 			if shouldClose {
-				if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-					c.Connection.Close()
-					c.ConnectionsToLocalApp[packet.ID].Close()
-					delete(s.ServerToClientConnections, clientIPAndPort)
-				}
-				break
+				break mainLoop
 			}
 			Log(fmt.Sprintf("Error reading packet from %s\n%s\n", clientIPAndPort, err))
-			continue
+			shouldClose = true
+			break mainLoop
 		}
 
 		// handle flags
@@ -105,36 +108,24 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			} else if packet.Flags == 3 { // close connection
 				Log(fmt.Sprintf("Received close connection packet from %s\n", clientIPAndPort))
 				shouldClose = true
-				if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-					c.Connection.Close()
-					c.ConnectionsToLocalApp[packet.ID].Close()
-					delete(s.ServerToClientConnections, clientIPAndPort)
-				}
-				break
+				break mainLoop
 			}
-			continue
+			continue mainLoop
 		}
 
 		if connectionToLocalApp, ok := s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID]; ok {
 			_, err = connectionToLocalApp.Write(packet.Payload)
 			if err != nil {
 				if shouldClose {
-					if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-						c.Connection.Close()
-						c.ConnectionsToLocalApp[packet.ID].Close()
-						delete(s.ServerToClientConnections, clientIPAndPort)
-					}
-					break
+					break mainLoop
 				}
 				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
-				continue
+				shouldClose = true
+				break mainLoop
 			}
 		} else {
 			s.ServerToClientConnections[clientIPAndPort].Ready = true
 			Log("Created new connection to local app\n")
-			if len(packet.Payload) == 0 {
-				continue
-			}
 
 			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, localAddress)
 			handleError(err)
@@ -144,15 +135,11 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			_, err = connectionToLocalApp.Write(packet.Payload)
 			if err != nil {
 				if shouldClose {
-					if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-						c.Connection.Close()
-						c.ConnectionsToLocalApp[packet.ID].Close()
-						delete(s.ServerToClientConnections, clientIPAndPort)
-					}
-					break
+					break mainLoop
 				}
 				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
-				continue
+				shouldClose = true
+				break mainLoop
 			}
 
 			s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
@@ -160,19 +147,11 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 			go func() {
 				for {
 					if shouldClose {
-						if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-							c.Connection.Close()
-							c.ConnectionsToLocalApp[packet.ID].Close()
-							delete(s.ServerToClientConnections, clientIPAndPort)
-						}
 						break
 					}
 					if time.Now().Unix()-s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime > 10 {
 						Log(fmt.Sprintf("Client %s timed out, closing the connection\n", clientIPAndPort))
 						shouldClose = true
-						s.ServerToClientConnections[clientIPAndPort].Connection.Close()
-						s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID].Close()
-						delete(s.ServerToClientConnections, clientIPAndPort)
 						break
 					}
 					time.Sleep(time.Second * 10)
@@ -189,32 +168,24 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 					n, err = connectionToLocalApp.Read(buffer)
 					if err != nil {
 						if shouldClose {
-							if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-								c.Connection.Close()
-								c.ConnectionsToLocalApp[packet.ID].Close()
-								delete(s.ServerToClientConnections, clientIPAndPort)
-							}
 							break
 						}
 						Log(fmt.Sprintf("Error reading packet from %s\n%s\n", localAddress, err))
-						continue
+						shouldClose = true
+						break
 					}
 					packet.Flags = 0
 					packet.ID = id
 					packet.Payload = buffer[:n]
 					encodedPacketBytes = packet.EncodePacket()
-					_, err = conn.Write(encodedPacketBytes)
+					_, err = conn.WriteToUDP(encodedPacketBytes, cAddr)
 					if err != nil {
 						if shouldClose {
-							if c, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
-								c.Connection.Close()
-								c.ConnectionsToLocalApp[packet.ID].Close()
-								delete(s.ServerToClientConnections, clientIPAndPort)
-							}
 							break
 						}
 						Log(fmt.Sprintf("Error writing packet to %s\n%s\n", conn.RemoteAddr().String(), err))
-						continue
+						shouldClose = true
+						break
 					}
 				}
 			}(packet.ID)
