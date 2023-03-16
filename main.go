@@ -16,6 +16,7 @@ var logFile *os.File
 type Config struct {
 	Role        string   `json:"role"`
 	AppPort     uint16   `json:"appPort"`
+	ClientDelay int      `json:"clientDelay"`
 	ServerIP    string   `json:"serverIP"`
 	ClientPort  string   `json:"clientPort"`
 	Negotiators []string `json:"negotiators"`
@@ -33,7 +34,7 @@ func Log(message string) {
 }
 
 func resolveAddress(adress string) *net.UDPAddr {
-	a, err := net.ResolveUDPAddr("udp", adress)
+	a, err := net.ResolveUDPAddr("udp4", adress)
 	handleError(err)
 	return a
 }
