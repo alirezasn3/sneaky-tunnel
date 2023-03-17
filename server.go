@@ -14,6 +14,7 @@ type User struct {
 	ConnectionsToLocalApp  map[byte]*net.UDPConn
 	LastReceivedPacketTime int64
 	Ready                  bool
+	ActualAddress          *net.UDPAddr
 }
 
 type Server struct {
@@ -67,14 +68,12 @@ func (s *Server) ListenForNegotiationRequests() {
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
-	clientAddress := resolveAddress(clientIPAndPort)
-	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, clientAddress)
+	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
 	handleError(err)
 	Log(fmt.Sprintf("Sent dummy packets to %s\n", clientIPAndPort))
 }
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
-	localAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", config.AppPort))
 	conn := s.ServerToClientConnections[clientIPAndPort].Connection
 	defer Log(fmt.Sprintf("Closed connection to %s\n", clientIPAndPort))
 	defer delete(s.ServerToClientConnections, clientIPAndPort)
@@ -85,6 +84,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	var err error
 	var shouldClose bool = false
 	var cAddr *net.UDPAddr
+	var destinationPort uint16
 mainLoop:
 	for {
 		n, cAddr, err = conn.ReadFromUDP(buffer)
@@ -103,12 +103,20 @@ mainLoop:
 			if packet.Flags == 1 { // dummy
 				s.ServerToClientConnections[clientIPAndPort].Ready = true
 				Log(fmt.Sprintf("Received dummy packet from %s\n", clientIPAndPort))
+				s.ServerToClientConnections[clientIPAndPort].ActualAddress = cAddr
+				if cAddr.String() != clientIPAndPort {
+					Log(fmt.Sprintf("Actual address for %s is %s\n", clientIPAndPort, cAddr.String()))
+				}
 			} else if packet.Flags == 2 { // keep-alive
 				s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
 			} else if packet.Flags == 3 { // close connection
 				Log(fmt.Sprintf("Received close connection packet from %s\n", clientIPAndPort))
 				shouldClose = true
 				break mainLoop
+			} else if packet.Flags == 4 { // destination port announcement
+				Log(string(packet.Payload) + "\n")
+				destinationPort = ByteSliceToUint16(packet.Payload)
+				Log(fmt.Sprintf("Received destination port announcement packet with id %d: %d\n", packet.ID, ByteSliceToUint16(packet.Payload)))
 			}
 			continue mainLoop
 		}
@@ -119,7 +127,7 @@ mainLoop:
 				if shouldClose {
 					break mainLoop
 				}
-				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
+				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err))
 				shouldClose = true
 				break mainLoop
 			}
@@ -127,7 +135,7 @@ mainLoop:
 			s.ServerToClientConnections[clientIPAndPort].Ready = true
 			Log("Created new connection to local app\n")
 
-			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, localAddress)
+			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort)))
 			handleError(err)
 
 			connectionToLocalApp := s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID]
@@ -137,7 +145,7 @@ mainLoop:
 				if shouldClose {
 					break mainLoop
 				}
-				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", config.AppPort, err))
+				Log(fmt.Sprintf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err))
 				shouldClose = true
 				break mainLoop
 			}
@@ -159,7 +167,7 @@ mainLoop:
 			}()
 
 			go func(id byte) {
-				buffer := make([]byte, (1024*8)-4)
+				buffer := make([]byte, (1024*8)-2)
 				var packet Packet
 				var encodedPacketBytes []byte
 				var n int
@@ -170,7 +178,7 @@ mainLoop:
 						if shouldClose {
 							break
 						}
-						Log(fmt.Sprintf("Error reading packet from %s\n%s\n", localAddress, err))
+						Log(fmt.Sprintf("Error reading packet from %s\t\n%s\n", connectionToLocalApp.RemoteAddr().String(), err))
 						shouldClose = true
 						break
 					}
