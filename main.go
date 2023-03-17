@@ -2,11 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -18,7 +18,6 @@ type Config struct {
 	ListeningPorts []uint16 `json:"listeningPorts"`
 	ClientDelay    int      `json:"clientDelay"`
 	ServerIP       string   `json:"serverIP"`
-	ClientPort     string   `json:"clientPort"`
 	Negotiators    []string `json:"negotiators"`
 }
 
@@ -28,15 +27,15 @@ func handleError(e error) {
 	}
 }
 
-func Log(message string) {
-	log.Print(message)
-	fmt.Print(message)
-}
-
 func resolveAddress(adress string) *net.UDPAddr {
 	a, err := net.ResolveUDPAddr("udp4", adress)
 	handleError(err)
 	return a
+}
+
+func getPortFromAddress(address string) string {
+	parts := strings.Split(address, ":")
+	return parts[len(parts)-1]
 }
 
 func init() {

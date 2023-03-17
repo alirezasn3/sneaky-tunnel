@@ -36,3 +36,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [ ] add diagram and explanation to readme
 - [x] add receiver app port on server to the Packet struct
 - [ ] add support for TCP over UDP
+- [x] add bbr script
+- [ ] add minimize to tray on windows
+- [x] add better logging
+- [ ] add close connection packet from server
