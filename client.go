@@ -105,11 +105,11 @@ func (c *Client) Start() {
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	tunnelListenAddress := resolveAddress("0.0.0.0:" + c.Port)
 	var err error
+	var wg sync.WaitGroup
+	shouldClose := false
 	c.ConnectionToServer, err = net.DialUDP("udp4", tunnelListenAddress, remoteAddress)
 	handleError(err)
 	log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
-
-	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
@@ -118,6 +118,9 @@ func (c *Client) Start() {
 		var packet Packet
 		var n int
 		for {
+			if shouldClose {
+				break
+			}
 			n, err = c.ConnectionToServer.Read(buffer)
 			handleError(err)
 			packet.DecodePacket(buffer[:n])
@@ -126,6 +129,10 @@ func (c *Client) Start() {
 			if packet.Flags == 1 {
 				log.Printf("Received dummy packet from server\n")
 				continue
+			} else if packet.Flags == 3 {
+				log.Printf("Received close connection packet from server\n")
+				shouldClose = true
+				break
 			}
 
 			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ConncetionsToUsers[packet.ID])
@@ -139,6 +146,9 @@ func (c *Client) Start() {
 	go func() {
 		var err error
 		for {
+			if shouldClose {
+				break
+			}
 			time.Sleep(time.Second * 5)
 			_, err = c.ConnectionToServer.Write([]byte{2, 0}) // keep-alive packet
 			handleError(err)
@@ -159,6 +169,9 @@ func (c *Client) Start() {
 			var serviceRemoteAddress *net.UDPAddr
 			var n int
 			for {
+				if shouldClose {
+					break
+				}
 				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
 				handleError(err)
 				if id, ok := c.ClientConnections[serviceRemoteAddress.String()]; ok {
