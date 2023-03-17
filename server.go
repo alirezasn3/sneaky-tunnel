@@ -24,6 +24,18 @@ type Server struct {
 
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for range ticker.C {
+			for _, user := range s.ServerToClientConnections {
+				if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
+					log.Printf("Evicting discoonected client at %s\n", user.ActualAddress.String())
+				}
+			}
+		}
+	}()
+
 	err := http.ListenAndServe("0.0.0.0:80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s\n", r.Method, r.URL.String())
 		if r.Method == "GET" {
@@ -71,7 +83,7 @@ func (s *Server) ListenForNegotiationRequests() {
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
 	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
 	handleError(err)
-	log.Printf("Sent dummy packets to %s\n", clientIPAndPort)
+	log.Printf("Sent dummy packet to %s\n", clientIPAndPort)
 }
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
@@ -153,20 +165,6 @@ mainLoop:
 			}
 
 			s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
-
-			go func() {
-				for {
-					if shouldClose {
-						break
-					}
-					if time.Now().Unix()-s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime > 10 {
-						log.Printf("Client %s timed out, closing the connection\n", clientIPAndPort)
-						shouldClose = true
-						break
-					}
-					time.Sleep(time.Second * 10)
-				}
-			}()
 
 			go func(id byte) {
 				buffer := make([]byte, (1024*8)-2)

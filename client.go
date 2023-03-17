@@ -128,6 +128,7 @@ func (c *Client) Start() {
 			// handle flags
 			if packet.Flags == 1 {
 				log.Printf("Received dummy packet from server\n")
+				fmt.Println("READY")
 				continue
 			} else if packet.Flags == 3 {
 				log.Printf("Received close connection packet from server\n")
