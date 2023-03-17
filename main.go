@@ -14,12 +14,12 @@ var config Config
 var logFile *os.File
 
 type Config struct {
-	Role        string   `json:"role"`
-	AppPort     uint16   `json:"appPort"`
-	ClientDelay int      `json:"clientDelay"`
-	ServerIP    string   `json:"serverIP"`
-	ClientPort  string   `json:"clientPort"`
-	Negotiators []string `json:"negotiators"`
+	Role           string   `json:"role"`
+	ListeningPorts []uint16 `json:"listeningPorts"`
+	ClientDelay    int      `json:"clientDelay"`
+	ServerIP       string   `json:"serverIP"`
+	ClientPort     string   `json:"clientPort"`
+	Negotiators    []string `json:"negotiators"`
 }
 
 func handleError(e error) {
