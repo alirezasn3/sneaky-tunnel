@@ -28,10 +28,10 @@ func (p *Packet) DecodePacket(bytes []byte) {
 }
 
 func ByteSliceToUint16(byteSlice []byte) uint16 {
-	return uint16(byteSlice[2]) | uint16(byteSlice[3])<<8
+	return uint16(byteSlice[0]) | uint16(byteSlice[1])<<8
 }
 
 func Uint16ToByteSlice(n uint16) []byte {
-	temp := make([]byte, 2)
+	temp := []byte{}
 	return append(temp, byte(n), byte(n>>8))
 }
