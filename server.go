@@ -76,19 +76,21 @@ func (s *Server) SendDummyPacket(clientIPAndPort string) {
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	connectionToClient := s.ServerToClientConnections[clientIPAndPort].Connection
-	defer log.Printf("Closed connection to %s\n", clientIPAndPort)
-	defer delete(s.ServerToClientConnections, clientIPAndPort)
-	defer connectionToClient.Close()
 	buffer := make([]byte, 1024*8)
 	var packet Packet
 	var n int
 	var err error
 	var shouldClose bool = false
-	var clientAddress *net.UDPAddr
+	var clientActualAddress *net.UDPAddr
 	var destinationPort uint16
+	defer log.Printf("Closed connection to %s\n", clientIPAndPort)
+	defer delete(s.ServerToClientConnections, clientIPAndPort)
+	defer connectionToClient.Close()
+	defer log.Printf("Sent close connection packet to %s\n", clientActualAddress.String())
+	defer connectionToClient.Write([]byte{3, 0})
 mainLoop:
 	for {
-		n, clientAddress, err = connectionToClient.ReadFromUDP(buffer)
+		n, clientActualAddress, err = connectionToClient.ReadFromUDP(buffer)
 		if err != nil {
 			if shouldClose {
 				break mainLoop
@@ -104,9 +106,9 @@ mainLoop:
 			if packet.Flags == 1 { // dummy
 				s.ServerToClientConnections[clientIPAndPort].Ready = true
 				log.Printf("Received dummy packet from %s\n", clientIPAndPort)
-				s.ServerToClientConnections[clientIPAndPort].ActualAddress = clientAddress
-				if clientAddress.String() != clientIPAndPort {
-					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientAddress.String())
+				s.ServerToClientConnections[clientIPAndPort].ActualAddress = clientActualAddress
+				if clientActualAddress.String() != clientIPAndPort {
+					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
 			} else if packet.Flags == 2 { // keep-alive
 				s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
@@ -186,7 +188,7 @@ mainLoop:
 					packet.ID = id
 					packet.Payload = buffer[:n]
 					encodedPacketBytes = packet.EncodePacket()
-					_, err = connectionToClient.WriteToUDP(encodedPacketBytes, clientAddress)
+					_, err = connectionToClient.WriteToUDP(encodedPacketBytes, clientActualAddress)
 					if err != nil {
 						if shouldClose {
 							break

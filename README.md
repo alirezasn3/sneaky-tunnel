@@ -39,4 +39,4 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [x] add bbr script
 - [ ] add minimize to tray on windows
 - [x] add better logging
-- [ ] add close connection packet from server
+- [x] add close connection packet from server
