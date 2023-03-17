@@ -130,11 +130,6 @@ mainLoop:
 				s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
-				log.Println(len(packet.Payload))
-				log.Printf("%b", packet.Payload)
-				for _, b := range packet.Payload {
-					log.Println(b)
-				}
 				destinationPort = ByteSliceToUint16(packet.Payload)
 				log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
 			}

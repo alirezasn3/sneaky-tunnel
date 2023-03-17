@@ -40,3 +40,4 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [ ] add minimize to tray on windows
 - [x] add better logging
 - [x] add close connection packet from server
+- [ ] validate http request
