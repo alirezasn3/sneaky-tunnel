@@ -5,22 +5,18 @@ package main
 // 1 -> dummy
 // 2 -> keep-alive
 // 3 -> close connection
+// 4 -> destination port announcement
 type Packet struct {
-	Payload         []byte // max length : 1024*8 - 1 - 1 - 2 = 8188
-	ID              byte   // length : 1
-	Flags           byte   // length : 1
-	DestinationPort uint16 // length : 2
-	Buffer          []byte // to avoid allocation for each packet
+	Payload []byte // max length : 1024*8 - 1 - 1 = 8190
+	ID      byte   // length : 1
+	Flags   byte   // length : 1
+	Buffer  []byte // to avoid allocation for each packet
 }
 
 func (p *Packet) EncodePacket() []byte {
-	if len(p.Payload) > 8188 {
-		panic("payload was larger than 8190 bytes")
-	}
 	p.Buffer = []byte{}
 	p.Buffer = append(p.Buffer, p.Flags)
 	p.Buffer = append(p.Buffer, p.ID)
-	p.Buffer = append(p.Buffer, byte(p.DestinationPort), byte(p.DestinationPort>>8))
 	p.Buffer = append(p.Buffer, p.Payload...)
 	return p.Buffer
 }
@@ -28,6 +24,14 @@ func (p *Packet) EncodePacket() []byte {
 func (p *Packet) DecodePacket(bytes []byte) {
 	p.Flags = bytes[0]
 	p.ID = bytes[1]
-	p.DestinationPort = uint16(bytes[2]) | uint16(bytes[3])<<8
-	p.Payload = bytes[4:]
+	p.Payload = bytes[2:]
+}
+
+func ByteSliceToUint16(byteSlice []byte) uint16 {
+	return uint16(byteSlice[2]) | uint16(byteSlice[3])<<8
+}
+
+func Uint16ToByteSlice(n uint16) []byte {
+	temp := make([]byte, 2)
+	return append(temp, byte(n), byte(n>>8))
 }
