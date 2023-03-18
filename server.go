@@ -48,8 +48,13 @@ func (s *Server) ListenForNegotiationRequests() {
 		if r.Method == "GET" {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
-			ip := strings.Split(clientIPAndPort, ":")[0]
-			port := strings.Split(clientIPAndPort, ":")[1]
+			clientIPAndPortParts := strings.Split(clientIPAndPort, ":")
+			if len(clientIPAndPort) != 2 {
+				w.WriteHeader(400)
+				return
+			}
+			ip := clientIPAndPortParts[0]
+			port := clientIPAndPortParts[1]
 			if net.ParseIP(ip) == nil {
 				w.WriteHeader(400)
 				return
