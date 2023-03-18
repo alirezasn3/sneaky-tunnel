@@ -47,11 +47,14 @@ func (s *Server) ListenForNegotiationRequests() {
 		if r.Method == "GET" {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
+			if net.ParseIP(clientIPAndPort) == nil {
+				w.WriteHeader(400)
+				return
+			}
 			if _, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
 				w.WriteHeader(400)
 				return
 			}
-			// clientAddress := resolveAddress(clientIPAndPort)
 			lAddr := resolveAddress("0.0.0.0:0")
 			conn, err := net.ListenUDP("udp", lAddr)
 			handleError(err)
