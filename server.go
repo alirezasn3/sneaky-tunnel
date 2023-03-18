@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,7 +48,14 @@ func (s *Server) ListenForNegotiationRequests() {
 		if r.Method == "GET" {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
-			if net.ParseIP(clientIPAndPort) == nil {
+			ip := strings.Split(clientIPAndPort, ":")[0]
+			port := strings.Split(clientIPAndPort, ":")[1]
+			if net.ParseIP(ip) == nil {
+				w.WriteHeader(400)
+				return
+			}
+			_, err := strconv.ParseUint(port, 10, 16)
+			if err != nil {
 				w.WriteHeader(400)
 				return
 			}
