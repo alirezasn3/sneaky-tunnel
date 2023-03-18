@@ -28,7 +28,7 @@ func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 10)
+		ticker := time.NewTicker(time.Second * 60)
 		for range ticker.C {
 			for clientIPAndPort, user := range s.ServerToClientConnections {
 				if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
@@ -74,19 +74,12 @@ func (s *Server) ListenForNegotiationRequests() {
 			s.ServerToClientConnections[clientIPAndPort] = &User{}
 			s.ServerToClientConnections[clientIPAndPort].Ready = false
 			s.ServerToClientConnections[clientIPAndPort].ShouldClose = false
+			s.ServerToClientConnections[clientIPAndPort].ActualAddress = nil
 			s.ServerToClientConnections[clientIPAndPort].Connection = conn
 			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp = make(map[byte]*net.UDPConn)
 			localAddrParts := strings.Split(conn.LocalAddr().String(), ":")
 			w.Write([]byte(localAddrParts[len(localAddrParts)-1]))
 			go s.HandleClientPackets(clientIPAndPort)
-			go func() {
-				time.Sleep(time.Second * 10)
-				if !s.ServerToClientConnections[clientIPAndPort].Ready {
-					s.ServerToClientConnections[clientIPAndPort].Connection.Close()
-					delete(s.ServerToClientConnections, clientIPAndPort)
-					log.Printf("Closed Connection to %s because client did not send a packet in time\n", clientIPAndPort)
-				}
-			}()
 		} else if r.Method == "POST" {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
@@ -104,13 +97,20 @@ func (s *Server) ListenForNegotiationRequests() {
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
-	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
-	handleError(err)
+	if s.ServerToClientConnections[clientIPAndPort].ActualAddress == nil {
+		s.ServerToClientConnections[clientIPAndPort].ActualAddress = resolveAddress(clientIPAndPort)
+		_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
+		handleError(err)
+	} else {
+		_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
+		handleError(err)
+	}
 	log.Printf("Sent dummy packet to %s\n", clientIPAndPort)
 }
 
 func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	connectionToClient := s.ServerToClientConnections[clientIPAndPort].Connection
+	user := s.ServerToClientConnections[clientIPAndPort]
 	buffer := make([]byte, 1024*8)
 	var packet Packet
 	var n int
@@ -120,12 +120,12 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 mainLoop:
 	for {
 		n, clientActualAddress, err = connectionToClient.ReadFromUDP(buffer)
+		if user.ShouldClose {
+			break mainLoop
+		}
 		if err != nil {
-			if s.ServerToClientConnections[clientIPAndPort].ShouldClose {
-				break mainLoop
-			}
 			log.Printf("Error reading packet from %s\n%s\n", clientIPAndPort, err)
-			s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+			user.ShouldClose = true
 			break mainLoop
 		}
 
@@ -133,17 +133,18 @@ mainLoop:
 		packet.DecodePacket(buffer[:n])
 		if packet.Flags > 0 {
 			if packet.Flags == 1 { // dummy
-				s.ServerToClientConnections[clientIPAndPort].Ready = true
+				user.Ready = true
 				log.Printf("Received dummy packet from %s\n", clientIPAndPort)
-				s.ServerToClientConnections[clientIPAndPort].ActualAddress = clientActualAddress
+				user.ActualAddress = clientActualAddress
 				if clientActualAddress.String() != clientIPAndPort {
 					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
 			} else if packet.Flags == 2 { // keep-alive
-				s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
+				log.Println("received keep alive packet")
+				user.LastReceivedPacketTime = time.Now().Unix()
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
-				s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+				user.ShouldClose = true
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
 				destinationPort = ByteSliceToUint16(packet.Payload)
@@ -152,33 +153,33 @@ mainLoop:
 			continue mainLoop
 		}
 
-		if connectionToLocalApp, ok := s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID]; ok {
+		if connectionToLocalApp, ok := user.ConnectionsToLocalApp[packet.ID]; ok {
 			_, err = connectionToLocalApp.Write(packet.Payload)
 			if err != nil {
-				if s.ServerToClientConnections[clientIPAndPort].ShouldClose {
+				if user.ShouldClose {
 					break mainLoop
 				}
 				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err)
-				s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+				user.ShouldClose = true
 				break mainLoop
 			}
 		} else {
-			s.ServerToClientConnections[clientIPAndPort].LastReceivedPacketTime = time.Now().Unix()
-			s.ServerToClientConnections[clientIPAndPort].Ready = true
+			user.LastReceivedPacketTime = time.Now().Unix()
+			user.Ready = true
 
-			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort)))
+			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort)))
 			handleError(err)
 
-			connectionToLocalApp := s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp[packet.ID]
+			connectionToLocalApp := user.ConnectionsToLocalApp[packet.ID]
 			log.Printf("Created new connection to %s for packets with id %d\n", connectionToLocalApp.RemoteAddr().String(), packet.ID)
 
 			_, err = connectionToLocalApp.Write(packet.Payload)
 			if err != nil {
-				if s.ServerToClientConnections[clientIPAndPort].ShouldClose {
+				if user.ShouldClose {
 					break mainLoop
 				}
 				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err)
-				s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+				user.ShouldClose = true
 				break mainLoop
 			}
 
@@ -191,11 +192,11 @@ mainLoop:
 				for {
 					n, err = connectionToLocalApp.Read(buffer)
 					if err != nil {
-						if s.ServerToClientConnections[clientIPAndPort].ShouldClose {
+						if user.ShouldClose {
 							break
 						}
 						log.Printf("Error reading packet from %s\t\n%s\n", connectionToLocalApp.RemoteAddr().String(), err)
-						s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+						user.ShouldClose = true
 						break
 					}
 					packet.Flags = 0
@@ -204,11 +205,11 @@ mainLoop:
 					encodedPacketBytes = packet.EncodePacket()
 					_, err = connectionToClient.WriteToUDP(encodedPacketBytes, clientActualAddress)
 					if err != nil {
-						if s.ServerToClientConnections[clientIPAndPort].ShouldClose {
+						if user.ShouldClose {
 							break
 						}
 						log.Printf("Error writing packet to %s\n%s\n", connectionToClient.RemoteAddr().String(), err)
-						s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+						user.ShouldClose = true
 						break
 					}
 				}
