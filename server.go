@@ -49,7 +49,7 @@ func (s *Server) ListenForNegotiationRequests() {
 			urlParts := strings.Split(r.URL.String(), "/")
 			clientIPAndPort := urlParts[len(urlParts)-1]
 			clientIPAndPortParts := strings.Split(clientIPAndPort, ":")
-			if len(clientIPAndPort) != 2 {
+			if len(clientIPAndPortParts) != 2 {
 				w.WriteHeader(400)
 				return
 			}

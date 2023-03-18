@@ -6,6 +6,7 @@ package main
 // 2 -> keep-alive
 // 3 -> close connection
 // 4 -> destination port announcement
+// 5 -> keep-alive response
 type Packet struct {
 	Payload []byte // max length : 1024*8 - 1 - 1 = 8190
 	ID      byte   // length : 1
