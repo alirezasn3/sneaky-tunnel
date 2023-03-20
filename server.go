@@ -148,10 +148,11 @@ mainLoop:
 			} else if packet.Flags == 4 { // destination port announcement
 				if len(packet.Payload) == 0 {
 					destinationPort = 1194
+					log.Printf("Received empty announcement packet, assuming port 1194")
 				} else {
 					destinationPort = ByteSliceToUint16(packet.Payload)
+					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
 				}
-				log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
 			}
 			continue mainLoop
 		}
