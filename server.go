@@ -140,7 +140,6 @@ mainLoop:
 					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
 			} else if packet.Flags == 2 { // keep-alive
-				log.Println("received keep alive packet")
 				user.LastReceivedPacketTime = time.Now().Unix()
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
