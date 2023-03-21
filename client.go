@@ -6,20 +6,20 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 )
 
 type Client struct {
-	PublicIP           string
-	Negotiator         string
-	ServerPort         string
-	Port               string
-	ConncetionsToUsers map[byte]*net.UDPAddr
-	ClientConnections  map[string]byte
-	Ready              bool
-	ConnectionToServer *net.UDPConn
-	LocalListeners     map[byte]*net.UDPConn
+	PublicIP               string
+	Negotiator             string
+	ServerPort             string
+	Port                   string
+	ConncetionsToUsers     map[byte]*net.UDPAddr
+	ClientConnections      map[string]byte
+	Ready                  bool
+	ConnectionToServer     *net.UDPConn
+	LocalListeners         map[byte]*net.UDPConn
+	LastReceivedPacketTime int64
 }
 
 func (c *Client) GetPublicIP() {
@@ -105,15 +105,12 @@ func (c *Client) Start() {
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	tunnelListenAddress := resolveAddress("0.0.0.0:" + c.Port)
 	var err error
-	var wg sync.WaitGroup
 	shouldClose := false
 	c.ConnectionToServer, err = net.DialUDP("udp4", tunnelListenAddress, remoteAddress)
 	handleError(err)
 	log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
 
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		buffer := make([]byte, 1024*8)
 		var packet Packet
 		var n int
@@ -128,12 +125,17 @@ func (c *Client) Start() {
 			// handle flags
 			if packet.Flags == 1 {
 				log.Printf("Received dummy packet from server\n")
+				c.LastReceivedPacketTime = time.Now().Unix()
+				c.Ready = true
 				fmt.Println("READY")
 				continue
 			} else if packet.Flags == 3 {
 				log.Printf("Received close connection packet from server\n")
 				shouldClose = true
 				break
+			} else if packet.Flags == 5 {
+				c.LastReceivedPacketTime = time.Now().Unix()
+				continue
 			}
 
 			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ConncetionsToUsers[packet.ID])
@@ -143,7 +145,6 @@ func (c *Client) Start() {
 
 	c.AskServerToSendDummyPacket()
 
-	wg.Add(1)
 	go func() {
 		var err error
 		for {
@@ -197,7 +198,18 @@ func (c *Client) Start() {
 		}(servicePort)
 	}
 
-	wg.Wait()
+	for {
+		if c.Ready && time.Now().Unix()-c.LastReceivedPacketTime > 10 {
+			shouldClose = true
+			break
+		}
+		time.Sleep(time.Second * 10)
+	}
+
+	c.ConnectionToServer.Close()
+	for _, conn := range c.LocalListeners {
+		conn.Close()
+	}
 }
 
 func (c *Client) CleanUp() {

@@ -28,7 +28,7 @@ func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 60)
+		ticker := time.NewTicker(time.Second * 15)
 		for range ticker.C {
 			for clientIPAndPort, user := range s.ServerToClientConnections {
 				if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
@@ -141,6 +141,7 @@ mainLoop:
 				}
 			} else if packet.Flags == 2 { // keep-alive
 				user.LastReceivedPacketTime = time.Now().Unix()
+				connectionToClient.WriteToUDP([]byte{5, 0}, clientActualAddress)
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
 				user.ShouldClose = true
@@ -220,7 +221,7 @@ mainLoop:
 			}(packet.ID)
 		}
 	}
-	connectionToClient.Write([]byte{3, 0})
+	connectionToClient.WriteToUDP([]byte{3, 0}, user.ActualAddress)
 	log.Printf("Sent close connection packet to %s\n", clientActualAddress.String())
 	connectionToClient.Close()
 	log.Printf("Closed connection to %s\n", clientActualAddress.String())

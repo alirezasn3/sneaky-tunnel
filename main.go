@@ -23,7 +23,7 @@ type Config struct {
 
 func handleError(e error) {
 	if e != nil {
-		panic(e)
+		log.Fatalln(e)
 	}
 }
 
