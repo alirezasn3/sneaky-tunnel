@@ -27,23 +27,6 @@ type Server struct {
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
-	go func() {
-		ticker := time.NewTicker(time.Second * 60)
-		for range ticker.C {
-			for clientIPAndPort, user := range s.ServerToClientConnections {
-				if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
-					if user.ShouldClose {
-						log.Printf("Evicting disconnected client at %s\n", user.ActualAddress.String())
-						delete(s.ServerToClientConnections, clientIPAndPort)
-					} else {
-						log.Printf("Possible disconneced client at %s. Evicting in next iteration\n", user.ActualAddress.String())
-						user.ShouldClose = true
-					}
-				}
-			}
-		}
-	}()
-
 	err := http.ListenAndServe("0.0.0.0:80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s\n", r.Method, r.URL.String())
 		if r.Method == "GET" {
@@ -106,7 +89,7 @@ func (s *Server) SendDummyPacket(clientIPAndPort string) {
 		s.ServerToClientConnections[clientIPAndPort].ActualAddress = resolveAddress(clientIPAndPort)
 
 	}
-	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
+	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
 	if err != nil {
 		log.Printf("Failed to send dummy packet to client at %s\n", s.ServerToClientConnections[clientIPAndPort].ActualAddress)
 		s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
@@ -124,6 +107,18 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	var err error
 	var clientActualAddress *net.UDPAddr
 	var destinationPort uint16
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 60)
+		for range ticker.C {
+			if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
+				user.ShouldClose = true
+				log.Printf("Evicting disconnected client at %s\n", user.ActualAddress.String())
+				break
+			}
+		}
+	}()
+
 mainLoop:
 	for {
 		n, clientActualAddress, err = connectionToClient.ReadFromUDP(buffer)
