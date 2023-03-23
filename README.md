@@ -5,11 +5,10 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ```json
 {
   "role": "client",
-  "appPort": 1194,
+  "listeningPorts": [1194],
   "serverIP": "1.2.3.4",
-  "clientPort": "4567",
+  "clientDelay": 3,
   "negotiators": [
-    "http://reverse-tunnel.netlify.app",
     "http://rt.alirezasn.workers.dev"
   ]
 }
@@ -18,15 +17,14 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ## sample config.json for server
 ```json
 {
-  "role": "server",
-  "appPort": 1194
+  "role": "server"
 }
 ```
 
 ### TODOs list
 - [ ] add comments
 - [ ] add traffic monitoring
-- [ ] add better error handling
+- [x] add better error handling
 - [ ] add https support for client requests
 - [x] add systemd file and script
 - [ ] add sample openvpn config for client and server
@@ -41,4 +39,4 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 - [x] add better logging
 - [x] add close connection packet from server
 - [x] validate http request
-- [ ] check for server timeout at client side
+- [x] check for server timeout at client side

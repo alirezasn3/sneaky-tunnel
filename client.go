@@ -24,9 +24,13 @@ type Client struct {
 
 func (c *Client) GetPublicIP() {
 	res, err := http.Get("http://api.ipify.org")
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	ipBytes, err := io.ReadAll(res.Body)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	res.Body.Close()
 	c.PublicIP = string(ipBytes)
 	log.Printf("Client public IP: %s\n", ipBytes)
@@ -36,7 +40,9 @@ func (c *Client) SelectNegotiator() {
 	for i, negotiator := range config.Negotiators {
 		log.Printf("Testing negotiator: %s\n", negotiator)
 		res, err := http.Head(negotiator)
-		handleError(err)
+		if err != nil {
+			log.Panic(err)
+		}
 		if res.StatusCode == 200 {
 			c.Negotiator = negotiator
 			log.Printf("\tNegotitator selected: %s\n", negotiator)
@@ -53,17 +59,23 @@ func (c *Client) SelectNegotiator() {
 func (c *Client) NegotiatePorts() {
 	listenAddress := resolveAddress("0.0.0.0:0")
 	tempConn, err := net.ListenUDP("udp4", listenAddress)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	c.Port = getPortFromAddress(tempConn.LocalAddr().String())
 	tempConn.Close()
 	log.Printf("Selected port %s as listening port for tunnel\n", c.Port)
 	res, err := http.Get(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	if res.StatusCode != 200 {
 		log.Fatalf("GET %s/%s/%s:%s failed with status %d\n", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode)
 	}
 	portBytes, err := io.ReadAll(res.Body)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	res.Body.Close()
 	c.ServerPort = string(portBytes)
 	log.Printf("Negotiated server port: %s\n", portBytes)
@@ -73,10 +85,14 @@ func (c *Client) OpenPortAndSendDummyPacket() {
 	listenAddress := resolveAddress("0.0.0.0:0" + c.Port)
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	conn, err := net.DialUDP("udp4", listenAddress, remoteAddress)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	log.Printf("Opened port from %s to %s\n", conn.LocalAddr().String(), remoteAddress.String())
 	_, err = conn.Write([]byte{1, 0}) // dummy packet
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	log.Print("Sent dummy packet to server\n")
 	conn.Close()
 }
@@ -91,7 +107,9 @@ func (c *Client) AskServerToSendDummyPacket() {
 		log.Print("\n")
 	}
 	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	if res.StatusCode != 200 {
 		log.Fatalf("POST %s/%s/%s:%s failed with status %d\n", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode)
 	}
@@ -107,7 +125,9 @@ func (c *Client) Start() {
 	var err error
 	shouldClose := false
 	c.ConnectionToServer, err = net.DialUDP("udp4", tunnelListenAddress, remoteAddress)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
 
 	go func() {
@@ -119,7 +139,9 @@ func (c *Client) Start() {
 				break
 			}
 			n, err = c.ConnectionToServer.Read(buffer)
-			handleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 			packet.DecodePacket(buffer[:n])
 
 			// handle flags
@@ -139,7 +161,9 @@ func (c *Client) Start() {
 			}
 
 			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ConncetionsToUsers[packet.ID])
-			handleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 	}()
 
@@ -147,13 +171,15 @@ func (c *Client) Start() {
 
 	go func() {
 		var err error
-		for {
+		ticker := time.NewTicker(time.Second * 5)
+		for range ticker.C {
 			if shouldClose {
 				break
 			}
-			time.Sleep(time.Second * 5)
 			_, err = c.ConnectionToServer.Write([]byte{2, 0}) // keep-alive packet
-			handleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 	}()
 
@@ -161,7 +187,9 @@ func (c *Client) Start() {
 		go func(servicePort uint16) {
 			serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
 			serviceConnection, err := net.ListenUDP("udp4", serviceListenAddress)
-			handleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 			log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
 
 			buffer := make([]byte, (1024*8)-2)
@@ -175,7 +203,9 @@ func (c *Client) Start() {
 					break
 				}
 				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
-				handleError(err)
+				if err != nil {
+					log.Panic(err)
+				}
 				if id, ok := c.ClientConnections[serviceRemoteAddress.String()]; ok {
 					packet.ID = id
 				} else {
@@ -187,23 +217,27 @@ func (c *Client) Start() {
 					announcementPacket := []byte{4, packet.ID}
 					announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
 					_, err := c.ConnectionToServer.Write(announcementPacket)
-					handleError(err)
+					if err != nil {
+						log.Panic(err)
+					}
 					log.Printf("Sent port announcement packet to server\n")
 				}
 				packet.Payload = buffer[:n]
 				encodedPacketBytes = packet.EncodePacket()
 				_, err = c.ConnectionToServer.Write(encodedPacketBytes)
-				handleError(err)
+				if err != nil {
+					log.Panic(err)
+				}
 			}
 		}(servicePort)
 	}
 
-	for {
+	ticker := time.NewTicker(time.Second * 10)
+	for range ticker.C {
 		if c.Ready && time.Now().Unix()-c.LastReceivedPacketTime > 10 {
 			shouldClose = true
 			break
 		}
-		time.Sleep(time.Second * 10)
 	}
 
 	c.ConnectionToServer.Close()

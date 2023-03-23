@@ -21,15 +21,11 @@ type Config struct {
 	Negotiators    []string `json:"negotiators"`
 }
 
-func handleError(e error) {
-	if e != nil {
-		log.Fatalln(e)
-	}
-}
-
 func resolveAddress(adress string) *net.UDPAddr {
 	a, err := net.ResolveUDPAddr("udp4", adress)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	return a
 }
 
@@ -44,16 +40,22 @@ func init() {
 		cPath = os.Args[1]
 	}
 	bytes, err := os.ReadFile(cPath)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	err = json.Unmarshal(bytes, &config)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 
 	lPath := "logs.txt"
 	if len(os.Args) > 2 {
 		lPath = os.Args[2]
 	}
 	logFile, err = os.OpenFile(lPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Lshortfile)
 }

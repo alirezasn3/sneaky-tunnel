@@ -71,7 +71,9 @@ func (s *Server) ListenForNegotiationRequests() {
 			}
 			lAddr := resolveAddress("0.0.0.0:0")
 			conn, err := net.ListenUDP("udp", lAddr)
-			handleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 			s.ServerToClientConnections[clientIPAndPort] = &User{}
 			s.ServerToClientConnections[clientIPAndPort].Ready = false
 			s.ServerToClientConnections[clientIPAndPort].ShouldClose = false
@@ -94,17 +96,21 @@ func (s *Server) ListenForNegotiationRequests() {
 			w.WriteHeader(400)
 		}
 	}))
-	handleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
 	if s.ServerToClientConnections[clientIPAndPort].ActualAddress == nil {
 		s.ServerToClientConnections[clientIPAndPort].ActualAddress = resolveAddress(clientIPAndPort)
-		_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
-		handleError(err)
-	} else {
-		_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
-		handleError(err)
+
+	}
+	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0, 0, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
+	if err != nil {
+		log.Printf("Failed to send dummy packet to client at %s\n", s.ServerToClientConnections[clientIPAndPort].ActualAddress)
+		s.ServerToClientConnections[clientIPAndPort].ShouldClose = true
+		return
 	}
 	log.Printf("Sent dummy packet to %s\n", clientIPAndPort)
 }
@@ -173,8 +179,13 @@ mainLoop:
 			user.LastReceivedPacketTime = time.Now().Unix()
 			user.Ready = true
 
-			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort)))
-			handleError(err)
+			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort))
+			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, serviceAddress)
+			if err != nil {
+				log.Printf("Failed to dial service at %s\n", serviceAddress)
+				user.ShouldClose = true
+				break mainLoop
+			}
 
 			connectionToLocalApp := user.ConnectionsToLocalApp[packet.ID]
 			log.Printf("Created new connection to %s for packets with id %d\n", connectionToLocalApp.RemoteAddr().String(), packet.ID)
