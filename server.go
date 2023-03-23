@@ -28,14 +28,15 @@ func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 15)
+		ticker := time.NewTicker(time.Second * 60)
 		for range ticker.C {
 			for clientIPAndPort, user := range s.ServerToClientConnections {
 				if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
 					if user.ShouldClose {
-						log.Printf("Evicting dissconnected client at %s\n", user.ActualAddress.String())
+						log.Printf("Evicting disconnected client at %s\n", user.ActualAddress.String())
 						delete(s.ServerToClientConnections, clientIPAndPort)
 					} else {
+						log.Printf("Possible disconneced client at %s. Evicting in next iteration\n", user.ActualAddress.String())
 						user.ShouldClose = true
 					}
 				}
