@@ -222,11 +222,11 @@ func (c *Client) Start() {
 		}(servicePort)
 	}
 
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 15)
 	diff := time.Now().Unix() - c.LastReceivedPacketTime
 	for range ticker.C {
-		if c.Ready && diff > 10 {
-			log.Printf("Did not receive keep alive packet from server for %d seconds, closing connection\n", diff)
+		if c.Ready && diff > 15 {
+			log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
 			shouldClose = true
 			break
 		}

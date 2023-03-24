@@ -28,7 +28,7 @@ func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 10)
+		ticker := time.NewTicker(time.Second * 15)
 		for range ticker.C {
 			for _, user := range s.ServerToClientConnections {
 				diff := time.Now().Unix() - user.LastReceivedPacketTime
@@ -43,7 +43,7 @@ func (s *Server) ListenForNegotiationRequests() {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 10)
+		ticker := time.NewTicker(time.Second * 5)
 		for range ticker.C {
 			for _, user := range s.ServerToClientConnections {
 				_, err := user.Connection.WriteToUDP([]byte{2, 0}, user.ActualAddress)
