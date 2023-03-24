@@ -32,11 +32,9 @@ func (s *Server) ListenForNegotiationRequests() {
 		for range ticker.C {
 			for _, user := range s.ServerToClientConnections {
 				diff := time.Now().Unix() - user.LastReceivedPacketTime
-				if user.Ready && diff > 10 {
+				if user.Ready && diff > 15 {
 					log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
 					user.ShouldClose = true
-					ticker.Stop()
-					break
 				}
 			}
 		}
@@ -147,6 +145,8 @@ mainLoop:
 			break mainLoop
 		}
 
+		user.LastReceivedPacketTime = time.Now().Unix()
+
 		// handle flags
 		packet.DecodePacket(buffer[:n])
 		if packet.Flags > 0 {
@@ -158,7 +158,7 @@ mainLoop:
 					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
 			} else if packet.Flags == 5 { // keep-alive response
-				user.LastReceivedPacketTime = time.Now().Unix()
+				continue
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
 				user.ShouldClose = true
