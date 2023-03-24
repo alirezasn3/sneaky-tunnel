@@ -155,8 +155,12 @@ func (c *Client) Start() {
 				log.Printf("Received close connection packet from server\n")
 				shouldClose = true
 				break
-			} else if packet.Flags == 5 {
+			} else if packet.Flags == 2 {
 				c.LastReceivedPacketTime = time.Now().Unix()
+				_, err = c.ConnectionToServer.Write([]byte{5, 0}) // keep-alive response packet
+				if err != nil {
+					log.Panic(err)
+				}
 				continue
 			}
 
@@ -168,20 +172,6 @@ func (c *Client) Start() {
 	}()
 
 	c.AskServerToSendDummyPacket()
-
-	go func() {
-		var err error
-		ticker := time.NewTicker(time.Second * 5)
-		for range ticker.C {
-			if shouldClose {
-				break
-			}
-			_, err = c.ConnectionToServer.Write([]byte{2, 0}) // keep-alive packet
-			if err != nil {
-				log.Panic(err)
-			}
-		}
-	}()
 
 	for _, servicePort := range config.ListeningPorts {
 		go func(servicePort uint16) {
@@ -233,8 +223,10 @@ func (c *Client) Start() {
 	}
 
 	ticker := time.NewTicker(time.Second * 10)
+	diff := time.Now().Unix() - c.LastReceivedPacketTime
 	for range ticker.C {
-		if c.Ready && time.Now().Unix()-c.LastReceivedPacketTime > 10 {
+		if c.Ready && diff > 10 {
+			log.Printf("Did not receive keep alive packet from server for %d seconds, closing connection\n", diff)
 			shouldClose = true
 			break
 		}

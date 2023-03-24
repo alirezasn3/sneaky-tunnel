@@ -27,6 +27,33 @@ type Server struct {
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for range ticker.C {
+			for _, user := range s.ServerToClientConnections {
+				diff := time.Now().Unix() - user.LastReceivedPacketTime
+				if user.Ready && diff > 10 {
+					log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
+					user.ShouldClose = true
+					ticker.Stop()
+					break
+				}
+			}
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for range ticker.C {
+			for _, user := range s.ServerToClientConnections {
+				_, err := user.Connection.WriteToUDP([]byte{2, 0}, user.ActualAddress)
+				if err != nil {
+					log.Printf("Error sending keep-alive packet to client at %s\n\t%s\n", user.ActualAddress.String(), err.Error())
+				}
+			}
+		}
+	}()
+
 	err := http.ListenAndServe("0.0.0.0:80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s\n", r.Method, r.URL.String())
 		if r.Method == "GET" {
@@ -108,17 +135,6 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	var clientActualAddress *net.UDPAddr
 	var destinationPort uint16
 
-	go func() {
-		ticker := time.NewTicker(time.Second * 60)
-		for range ticker.C {
-			if user.Ready && time.Now().Unix()-user.LastReceivedPacketTime > 10 {
-				user.ShouldClose = true
-				log.Printf("Evicting disconnected client at %s\n", user.ActualAddress.String())
-				break
-			}
-		}
-	}()
-
 mainLoop:
 	for {
 		n, clientActualAddress, err = connectionToClient.ReadFromUDP(buffer)
@@ -141,9 +157,8 @@ mainLoop:
 				if clientActualAddress.String() != clientIPAndPort {
 					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
-			} else if packet.Flags == 2 { // keep-alive
+			} else if packet.Flags == 5 { // keep-alive response
 				user.LastReceivedPacketTime = time.Now().Unix()
-				connectionToClient.WriteToUDP([]byte{5, 0}, clientActualAddress)
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
 				user.ShouldClose = true
