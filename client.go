@@ -223,8 +223,8 @@ func (c *Client) Start() {
 	}
 
 	ticker := time.NewTicker(time.Second * 15)
-	diff := time.Now().Unix() - c.LastReceivedPacketTime
 	for range ticker.C {
+		diff := time.Now().Unix() - c.LastReceivedPacketTime
 		if c.Ready && diff > 15 {
 			log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
 			shouldClose = true
