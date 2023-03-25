@@ -165,7 +165,9 @@ mainLoop:
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
 				if len(packet.Payload) == 2 {
+					log.Println(packet)
 					destinationPort = ByteSliceToUint16(packet.Payload)
+					log.Println(destinationPort)
 					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
 				} else {
 					log.Printf("Received invalid announcement packet from %s\n", user.ActualAddress)
