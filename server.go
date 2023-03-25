@@ -27,18 +27,18 @@ type Server struct {
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
-	go func() {
-		ticker := time.NewTicker(time.Second * 15)
-		for range ticker.C {
-			for _, user := range s.ServerToClientConnections {
-				diff := time.Now().Unix() - user.LastReceivedPacketTime
-				if user.Ready && diff > 15 {
-					log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
-					user.ShouldClose = true
-				}
-			}
-		}
-	}()
+	// go func() {
+	// 	ticker := time.NewTicker(time.Second * 15)
+	// 	for range ticker.C {
+	// 		for _, user := range s.ServerToClientConnections {
+	// 			diff := time.Now().Unix() - user.LastReceivedPacketTime
+	// 			if user.Ready && diff > 15 {
+	// 				log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
+	// 				user.ShouldClose = true
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	go func() {
 		ticker := time.NewTicker(time.Second * 5)
@@ -164,12 +164,11 @@ mainLoop:
 				user.ShouldClose = true
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
-				if len(packet.Payload) == 0 {
-					destinationPort = 1194
-					log.Printf("Received empty announcement packet, assuming port 1194")
-				} else {
+				if len(packet.Payload) == 2 {
 					destinationPort = ByteSliceToUint16(packet.Payload)
 					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
+				} else {
+					log.Printf("Received invalid announcement packet from %s\n", user.ActualAddress)
 				}
 			}
 			continue mainLoop
