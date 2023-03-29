@@ -27,26 +27,40 @@ type Server struct {
 func (s *Server) ListenForNegotiationRequests() {
 	s.ServerToClientConnections = make(map[string]*User)
 
-	// go func() {
-	// 	ticker := time.NewTicker(time.Second * 15)
-	// 	for range ticker.C {
-	// 		for _, user := range s.ServerToClientConnections {
-	// 			diff := time.Now().Unix() - user.LastReceivedPacketTime
-	// 			if user.Ready && diff > 15 {
-	// 				log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
-	// 				user.ShouldClose = true
-	// 			}
-	// 		}
-	// 	}
-	// }()
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		for range ticker.C {
+			for clientIPAndPort, user := range s.ServerToClientConnections {
+				if user.ShouldClose {
+					delete(s.ServerToClientConnections, clientIPAndPort)
+				}
+				diff := time.Now().Unix() - user.LastReceivedPacketTime
+				if user.Ready && diff > 60 {
+					log.Printf("Evicting disconnected client at %s, received last packet %d seconds ago\n", user.ActualAddress.String(), diff)
+					user.ShouldClose = true
+				}
+			}
+			log.Println()
+			log.Printf("Hourly check, %d active connections:\n", len(s.ServerToClientConnections))
+			for clientIPAndPort := range s.ServerToClientConnections {
+				log.Printf("%s\n", clientIPAndPort)
+			}
+			log.Println()
+		}
+	}()
 
 	go func() {
 		ticker := time.NewTicker(time.Second * 5)
 		for range ticker.C {
-			for _, user := range s.ServerToClientConnections {
+			for clientIPAndPort, user := range s.ServerToClientConnections {
+				if user.ShouldClose {
+					delete(s.ServerToClientConnections, clientIPAndPort)
+					continue
+				}
 				_, err := user.Connection.WriteToUDP([]byte{2, 0}, user.ActualAddress)
 				if err != nil {
 					log.Printf("Error sending keep-alive packet to client at %s\n\t%s\n", user.ActualAddress.String(), err.Error())
+					user.ShouldClose = true
 				}
 			}
 		}
@@ -140,6 +154,9 @@ mainLoop:
 			break mainLoop
 		}
 		if err != nil {
+			if user.ShouldClose {
+				break mainLoop
+			}
 			log.Printf("Error reading packet from %s\n%s\n", clientIPAndPort, err)
 			user.ShouldClose = true
 			break mainLoop
@@ -157,17 +174,13 @@ mainLoop:
 				if clientActualAddress.String() != clientIPAndPort {
 					log.Printf("Actual address for %s is %s\n", clientIPAndPort, clientActualAddress.String())
 				}
-			} else if packet.Flags == 5 { // keep-alive response
-				continue
 			} else if packet.Flags == 3 { // close connection
 				log.Printf("Received close connection packet from %s\n", clientIPAndPort)
 				user.ShouldClose = true
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
 				if len(packet.Payload) == 2 {
-					log.Println(packet)
 					destinationPort = ByteSliceToUint16(packet.Payload)
-					log.Println(destinationPort)
 					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
 				} else {
 					log.Printf("Received invalid announcement packet from %s\n", user.ActualAddress)
@@ -187,12 +200,14 @@ mainLoop:
 				break mainLoop
 			}
 		} else {
-			user.LastReceivedPacketTime = time.Now().Unix()
 			user.Ready = true
 
 			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort))
 			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, serviceAddress)
 			if err != nil {
+				if user.ShouldClose {
+					break mainLoop
+				}
 				log.Printf("Failed to dial service at %s\n", serviceAddress)
 				user.ShouldClose = true
 				break mainLoop

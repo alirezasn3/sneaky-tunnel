@@ -140,14 +140,18 @@ func (c *Client) Start() {
 			}
 			n, err = c.ConnectionToServer.Read(buffer)
 			if err != nil {
+				if shouldClose {
+					break
+				}
 				log.Panic(err)
 			}
 			packet.DecodePacket(buffer[:n])
 
+			c.LastReceivedPacketTime = time.Now().Unix()
+
 			// handle flags
 			if packet.Flags == 1 {
 				log.Printf("Received dummy packet from server\n")
-				c.LastReceivedPacketTime = time.Now().Unix()
 				c.Ready = true
 				fmt.Println("READY")
 				continue
@@ -156,9 +160,11 @@ func (c *Client) Start() {
 				shouldClose = true
 				break
 			} else if packet.Flags == 2 {
-				c.LastReceivedPacketTime = time.Now().Unix()
 				_, err = c.ConnectionToServer.Write([]byte{5, 0}) // keep-alive response packet
 				if err != nil {
+					if shouldClose {
+						break
+					}
 					log.Panic(err)
 				}
 				continue
@@ -166,6 +172,9 @@ func (c *Client) Start() {
 
 			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ConncetionsToUsers[packet.ID])
 			if err != nil {
+				if shouldClose {
+					break
+				}
 				log.Panic(err)
 			}
 		}
@@ -178,6 +187,9 @@ func (c *Client) Start() {
 			serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
 			serviceConnection, err := net.ListenUDP("udp4", serviceListenAddress)
 			if err != nil {
+				if shouldClose {
+					return
+				}
 				log.Panic(err)
 			}
 			log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
@@ -194,6 +206,9 @@ func (c *Client) Start() {
 				}
 				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
 				if err != nil {
+					if shouldClose {
+						break
+					}
 					log.Panic(err)
 				}
 				if id, ok := c.ClientConnections[serviceRemoteAddress.String()]; ok {
@@ -208,6 +223,9 @@ func (c *Client) Start() {
 					announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
 					_, err := c.ConnectionToServer.Write(announcementPacket)
 					if err != nil {
+						if shouldClose {
+							break
+						}
 						log.Panic(err)
 					}
 					log.Printf("Sent port announcement packet to server\n")
@@ -216,6 +234,9 @@ func (c *Client) Start() {
 				encodedPacketBytes = packet.EncodePacket()
 				_, err = c.ConnectionToServer.Write(encodedPacketBytes)
 				if err != nil {
+					if shouldClose {
+						break
+					}
 					log.Panic(err)
 				}
 			}
