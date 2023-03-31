@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -99,14 +98,10 @@ func main() {
 			c.CleanUp()
 			os.Exit(0)
 		}(&c)
-		for {
-			fmt.Println("CONNECTING")
-			c.SelectNegotiator()
-			c.NegotiatePorts()
-			c.OpenPortAndSendDummyPacket()
-			c.Start()
-			fmt.Println("DISCONNECTED")
-		}
+		c.SelectNegotiator()
+		c.NegotiatePorts()
+		c.OpenPortAndSendDummyPacket()
+		c.Start()
 	} else if config.Role == "server" {
 		(&Server{}).ListenForNegotiationRequests()
 	}
