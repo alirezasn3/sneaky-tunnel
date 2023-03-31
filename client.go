@@ -10,7 +10,6 @@ import (
 )
 
 type Client struct {
-	PublicIP                        string
 	Negotiator                      string
 	ServerPort                      string
 	Port                            string
@@ -21,20 +20,6 @@ type Client struct {
 	LocalListeners                  map[byte]*net.UDPConn
 	LastReceivedPacketTime          int64
 	IsListeningForPacketsFromServer bool
-}
-
-func (c *Client) GetPublicIP() {
-	res, err := http.Get("http://api.ipify.org")
-	if err != nil {
-		log.Panic(err)
-	}
-	ipBytes, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Panic(err)
-	}
-	res.Body.Close()
-	c.PublicIP = string(ipBytes)
-	log.Printf("Client public IP: %s\n", ipBytes)
 }
 
 func (c *Client) SelectNegotiator() {
@@ -66,12 +51,12 @@ func (c *Client) NegotiatePorts() {
 	c.Port = getPortFromAddress(tempConn.LocalAddr().String())
 	tempConn.Close()
 	log.Printf("Selected port %s as listening port for tunnel\n", c.Port)
-	res, err := http.Get(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := http.Get(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
 	if err != nil {
 		log.Panic(err)
 	}
 	if res.StatusCode != 200 {
-		log.Fatalf("GET %s/%s/%s:%s failed with status %d\n", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode)
+		log.Fatalf("GET %s/%s/%s failed with status %d\n", c.Negotiator, config.ServerIP, c.Port, res.StatusCode)
 	}
 	portBytes, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -103,12 +88,12 @@ func (c *Client) AskServerToSendDummyPacket() {
 		time.Sleep(time.Millisecond * 10)
 	}
 	log.Printf("Asking server for dummy packet\n")
-	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := http.Post(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if res.StatusCode != 200 {
-		log.Fatalf("POST %s/%s/%s:%s failed with status %d\n", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode)
+		log.Fatalf("POST %s/%s/%s failed with status %d\n", c.Negotiator, config.ServerIP, c.Port, res.StatusCode)
 	}
 }
 

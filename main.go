@@ -101,7 +101,6 @@ func main() {
 		}(&c)
 		for {
 			fmt.Println("CONNECTING")
-			c.GetPublicIP()
 			c.SelectNegotiator()
 			c.NegotiatePorts()
 			c.OpenPortAndSendDummyPacket()
