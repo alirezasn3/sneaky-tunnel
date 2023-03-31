@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"time"
 )
 
@@ -25,16 +24,16 @@ type Client struct {
 func (c *Client) SelectNegotiator() {
 	for i, negotiator := range config.Negotiators {
 		log.Printf("Testing negotiator: %s\n", negotiator)
-		res, err := http.Head(negotiator)
+		res, err := httpClient.Head(negotiator)
 		if err != nil {
 			log.Panic(err)
 		}
 		if res.StatusCode == 200 {
 			c.Negotiator = negotiator
-			log.Printf("\tNegotitator selected: %s\n", negotiator)
+			log.Printf("Negotitator selected: %s\n", negotiator)
 			break
 		} else {
-			log.Printf("\t%s did not respond to HEAD request with status 200\n", negotiator)
+			log.Printf("%s did not respond to HEAD request with status 200\n", negotiator)
 		}
 		if i == len(config.Negotiators)-1 {
 			log.Fatalln("Failed to select negotiator, none of them responded with 200 status.")
@@ -51,7 +50,7 @@ func (c *Client) NegotiatePorts() {
 	c.Port = getPortFromAddress(tempConn.LocalAddr().String())
 	tempConn.Close()
 	log.Printf("Selected port %s as listening port for tunnel\n", c.Port)
-	res, err := http.Get(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := httpClient.Get(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port)) // https://negotiator/serverIP/ClientIPAndPort
 	if err != nil {
 		log.Panic(err)
 	}
@@ -88,7 +87,7 @@ func (c *Client) AskServerToSendDummyPacket() {
 		time.Sleep(time.Millisecond * 10)
 	}
 	log.Printf("Asking server for dummy packet\n")
-	res, err := http.Post(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
+	res, err := httpClient.Post(fmt.Sprintf("%s/%s/%s", c.Negotiator, config.ServerIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -201,7 +200,7 @@ func (c *Client) Start() {
 					c.ClientConnections[serviceRemoteAddress.String()] = packet.ID
 					c.ConncetionsToUsers[packet.ID] = serviceRemoteAddress
 					c.LocalListeners[packet.ID] = serviceConnection
-					log.Printf("Received packet from\n\tnew user at %s\n\ton service at %s\n\twith id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
+					log.Printf("Received packet from new user at %s on service at %s with id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
 					announcementPacket := []byte{4, packet.ID}
 					announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
 					_, err := c.ConnectionToServer.Write(announcementPacket)

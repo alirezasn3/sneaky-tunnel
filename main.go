@@ -1,24 +1,30 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var config Config
 var logFile *os.File
+var httpClient *http.Client
 
 type Config struct {
 	Role           string   `json:"role"`
 	ListeningPorts []uint16 `json:"listeningPorts"`
 	ServerIP       string   `json:"serverIP"`
 	Negotiators    []string `json:"negotiators"`
+	Resolver       string   `json:"resolver"`
 }
 
 func resolveAddress(adress string) *net.UDPAddr {
@@ -83,6 +89,26 @@ func init() {
 	}
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ltime | log.Lshortfile)
+
+	dialer := &net.Dialer{
+		Resolver: &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{
+					Timeout: time.Second * 10,
+				}
+				return d.DialContext(ctx, "udp", config.Resolver+":53")
+			},
+		},
+	}
+	dialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return dialer.DialContext(ctx, network, addr)
+	}
+	http.DefaultTransport.(*http.Transport).DialContext = dialContext
+	httpClient = &http.Client{
+		Timeout:   time.Second * 5,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+	}
 }
 
 func main() {

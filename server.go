@@ -154,6 +154,7 @@ func (s *Server) HandleClientPackets(clientIPAndPort string) {
 	var err error
 	var clientActualAddress *net.UDPAddr
 	var destinationPort uint16
+	var receivedDestinationAnnouncement = false
 
 mainLoop:
 	for {
@@ -189,7 +190,8 @@ mainLoop:
 			} else if packet.Flags == 4 { // destination port announcement
 				if len(packet.Payload) == 2 {
 					destinationPort = ByteSliceToUint16(packet.Payload)
-					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, ByteSliceToUint16(packet.Payload))
+					receivedDestinationAnnouncement = true
+					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, destinationPort)
 				} else {
 					log.Printf("Received invalid announcement packet from %s\n", user.ActualAddress)
 				}
@@ -208,6 +210,9 @@ mainLoop:
 				break mainLoop
 			}
 		} else {
+			if !receivedDestinationAnnouncement {
+				continue
+			}
 			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort))
 			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, serviceAddress)
 			if err != nil {
