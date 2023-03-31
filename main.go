@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -16,7 +18,6 @@ var logFile *os.File
 type Config struct {
 	Role           string   `json:"role"`
 	ListeningPorts []uint16 `json:"listeningPorts"`
-	ClientDelay    int      `json:"clientDelay"`
 	ServerIP       string   `json:"serverIP"`
 	Negotiators    []string `json:"negotiators"`
 }
@@ -32,6 +33,31 @@ func resolveAddress(adress string) *net.UDPAddr {
 func getPortFromAddress(address string) string {
 	parts := strings.Split(address, ":")
 	return parts[len(parts)-1]
+}
+
+func getIPFromAddress(address string) string {
+	parts := strings.Split(address, ":")
+	return parts[0]
+}
+
+func isValidAddress(address string) bool {
+	if len(address) > 21 {
+		return false
+	}
+	addressParts := strings.Split(address, ":")
+	if len(addressParts) != 2 {
+		return false
+	}
+	ipParts := strings.Split(addressParts[0], ".")
+	if len(ipParts) != 4 {
+		return false
+	}
+	_, err := strconv.ParseUint(addressParts[1], 10, 16)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(address)
+	return ip != nil
 }
 
 func init() {
@@ -57,7 +83,7 @@ func init() {
 		log.Panic(err)
 	}
 	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Lshortfile)
+	log.SetFlags(log.Ltime | log.Lshortfile)
 }
 
 func main() {
@@ -73,14 +99,16 @@ func main() {
 			c.CleanUp()
 			os.Exit(0)
 		}(&c)
-
-		c.GetPublicIP()
-		c.SelectNegotiator()
-		c.NegotiatePorts()
-		c.OpenPortAndSendDummyPacket()
-		c.Start()
+		for {
+			fmt.Println("CONNECTING")
+			c.GetPublicIP()
+			c.SelectNegotiator()
+			c.NegotiatePorts()
+			c.OpenPortAndSendDummyPacket()
+			c.Start()
+			fmt.Println("DISCONNECTED")
+		}
 	} else if config.Role == "server" {
-		var s Server
-		s.ListenForNegotiationRequests()
+		(&Server{}).ListenForNegotiationRequests()
 	}
 }
