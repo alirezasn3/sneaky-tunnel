@@ -12,8 +12,8 @@ type Client struct {
 	Negotiator                      string
 	ServerPort                      string
 	Port                            string
-	ConncetionsToUsers              map[byte]*net.UDPAddr
-	ClientConnections               map[string]byte
+	ServiceAddresses                map[byte]*net.UDPAddr
+	ServiceIDs                      map[string]byte
 	Ready                           bool
 	ConnectionToServer              *net.UDPConn
 	LocalListeners                  map[byte]*net.UDPConn
@@ -97,8 +97,8 @@ func (c *Client) AskServerToSendDummyPacket() {
 }
 
 func (c *Client) Start() {
-	c.ConncetionsToUsers = make(map[byte]*net.UDPAddr)
-	c.ClientConnections = make(map[string]byte)
+	c.ServiceAddresses = make(map[byte]*net.UDPAddr)
+	c.ServiceIDs = make(map[string]byte)
 	c.LocalListeners = make(map[byte]*net.UDPConn)
 
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
@@ -152,7 +152,7 @@ func (c *Client) Start() {
 				continue
 			}
 
-			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ConncetionsToUsers[packet.ID])
+			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ServiceAddresses[packet.ID])
 			if err != nil {
 				if shouldClose {
 					break
@@ -193,12 +193,12 @@ func (c *Client) Start() {
 					}
 					log.Panic(err)
 				}
-				if id, ok := c.ClientConnections[serviceRemoteAddress.String()]; ok {
+				if id, ok := c.ServiceIDs[serviceRemoteAddress.String()]; ok {
 					packet.ID = id
 				} else {
-					packet.ID = byte(len(c.ClientConnections))
-					c.ClientConnections[serviceRemoteAddress.String()] = packet.ID
-					c.ConncetionsToUsers[packet.ID] = serviceRemoteAddress
+					packet.ID = byte(len(c.ServiceIDs))
+					c.ServiceIDs[serviceRemoteAddress.String()] = packet.ID
+					c.ServiceAddresses[packet.ID] = serviceRemoteAddress
 					c.LocalListeners[packet.ID] = serviceConnection
 					log.Printf("Received packet from new user at %s on service at %s with id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
 					announcementPacket := []byte{4, packet.ID}
