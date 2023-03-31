@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +21,16 @@ type User struct {
 
 type Server struct {
 	ServerToClientConnections map[string]*User
+	BlockedIPs                []string
+}
+
+func (s *Server) IsBlockedIP(ip string) bool {
+	for _, i := range s.BlockedIPs {
+		if i == ip {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) ListenForNegotiationRequests() {
@@ -57,6 +66,9 @@ func (s *Server) ListenForNegotiationRequests() {
 					delete(s.ServerToClientConnections, clientIPAndPort)
 					continue
 				}
+				if !user.Ready {
+					continue
+				}
 				_, err := user.Connection.WriteToUDP([]byte{2, 0}, user.ActualAddress)
 				if err != nil {
 					log.Printf("Error sending keep-alive packet to client at %s\n\t%s\n", user.ActualAddress.String(), err.Error())
@@ -67,26 +79,29 @@ func (s *Server) ListenForNegotiationRequests() {
 	}()
 
 	err := http.ListenAndServe("0.0.0.0:80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.IsBlockedIP(r.RemoteAddr) {
+			if hj, ok := w.(http.Hijacker); ok {
+				conn, _, _ := hj.Hijack()
+				conn.Close()
+				return
+			}
+			w.WriteHeader(500)
+			return
+		}
+
+		urlParts := strings.Split(r.URL.String(), "/")
+		clientIPAndPort := urlParts[len(urlParts)-1]
+
+		if isValid := isValidAddress(clientIPAndPort); !isValid {
+			w.WriteHeader(400)
+			s.BlockedIPs = append(s.BlockedIPs, getIPFromAddress(r.RemoteAddr))
+			log.Printf("Blocked %s\n", getIPFromAddress(r.RemoteAddr))
+			return
+		}
+
 		log.Printf("%s %s\n", r.Method, r.URL.String())
+
 		if r.Method == "GET" {
-			urlParts := strings.Split(r.URL.String(), "/")
-			clientIPAndPort := urlParts[len(urlParts)-1]
-			clientIPAndPortParts := strings.Split(clientIPAndPort, ":")
-			if len(clientIPAndPortParts) != 2 {
-				w.WriteHeader(400)
-				return
-			}
-			ip := clientIPAndPortParts[0]
-			port := clientIPAndPortParts[1]
-			if net.ParseIP(ip) == nil {
-				w.WriteHeader(400)
-				return
-			}
-			_, err := strconv.ParseUint(port, 10, 16)
-			if err != nil {
-				w.WriteHeader(400)
-				return
-			}
 			if _, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
 				w.WriteHeader(400)
 				return
@@ -96,18 +111,10 @@ func (s *Server) ListenForNegotiationRequests() {
 			if err != nil {
 				log.Panic(err)
 			}
-			s.ServerToClientConnections[clientIPAndPort] = &User{}
-			s.ServerToClientConnections[clientIPAndPort].Ready = false
-			s.ServerToClientConnections[clientIPAndPort].ShouldClose = false
-			s.ServerToClientConnections[clientIPAndPort].ActualAddress = nil
-			s.ServerToClientConnections[clientIPAndPort].Connection = conn
-			s.ServerToClientConnections[clientIPAndPort].ConnectionsToLocalApp = make(map[byte]*net.UDPConn)
-			localAddrParts := strings.Split(conn.LocalAddr().String(), ":")
-			w.Write([]byte(localAddrParts[len(localAddrParts)-1]))
+			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn)}
+			w.Write([]byte(getPortFromAddress(conn.LocalAddr().String())))
 			go s.HandleClientPackets(clientIPAndPort)
 		} else if r.Method == "POST" {
-			urlParts := strings.Split(r.URL.String(), "/")
-			clientIPAndPort := urlParts[len(urlParts)-1]
 			if _, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
 				go s.SendDummyPacket(clientIPAndPort)
 				w.WriteHeader(200)
@@ -115,12 +122,30 @@ func (s *Server) ListenForNegotiationRequests() {
 				w.WriteHeader(400)
 			}
 		} else {
+			s.BlockedIPs = append(s.BlockedIPs, getIPFromAddress(r.RemoteAddr))
 			w.WriteHeader(400)
 		}
 	}))
 	if err != nil {
 		log.Panic(err)
 	}
+	// http://ip-api.com/json/94.183.9.141
+	// {
+	// 	"status":"success",
+	// 	"country":"Iran",
+	// 	"countryCode":"IR",
+	// 	"region":"23",
+	// 	"regionName":"Tehran",
+	// 	"city":"Tehran",
+	// 	"zip":"",
+	// 	"lat":35.7838,
+	// 	"lon":51.4361,
+	// 	"timezone":"Asia/Tehran",
+	// 	"isp":"SHATEL Network",
+	// 	"org":"Shatel Group",
+	// 	"as":"AS31549 Aria Shatel Company Ltd",
+	// 	"query":"94.183.9.141"
+	// }
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
@@ -200,8 +225,6 @@ mainLoop:
 				break mainLoop
 			}
 		} else {
-			user.Ready = true
-
 			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort))
 			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, serviceAddress)
 			if err != nil {
