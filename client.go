@@ -10,16 +10,17 @@ import (
 )
 
 type Client struct {
-	PublicIP               string
-	Negotiator             string
-	ServerPort             string
-	Port                   string
-	ConncetionsToUsers     map[byte]*net.UDPAddr
-	ClientConnections      map[string]byte
-	Ready                  bool
-	ConnectionToServer     *net.UDPConn
-	LocalListeners         map[byte]*net.UDPConn
-	LastReceivedPacketTime int64
+	PublicIP                        string
+	Negotiator                      string
+	ServerPort                      string
+	Port                            string
+	ConncetionsToUsers              map[byte]*net.UDPAddr
+	ClientConnections               map[string]byte
+	Ready                           bool
+	ConnectionToServer              *net.UDPConn
+	LocalListeners                  map[byte]*net.UDPConn
+	LastReceivedPacketTime          int64
+	IsListeningForPacketsFromServer bool
 }
 
 func (c *Client) GetPublicIP() {
@@ -98,17 +99,13 @@ func (c *Client) OpenPortAndSendDummyPacket() {
 }
 
 func (c *Client) AskServerToSendDummyPacket() {
-	if config.ClientDelay > 0 {
-		log.Printf("Waiting %d seconds before asking server for dummy packet", config.ClientDelay)
-		for i := 0; i < config.ClientDelay; i++ {
-			time.Sleep(time.Second)
-			log.Print(".")
-		}
-		log.Print("\n")
+	for !c.IsListeningForPacketsFromServer {
+		time.Sleep(time.Millisecond * 10)
 	}
+	log.Printf("Asking server for dummy packet\n")
 	res, err := http.Post(fmt.Sprintf("%s/%s/%s:%s", c.Negotiator, config.ServerIP, c.PublicIP, c.Port), "text/plain", nil) // https://negotiator/serverIP/ClientIPAndPort
 	if err != nil {
-		log.Panic(err)
+		log.Fatalln(err)
 	}
 	if res.StatusCode != 200 {
 		log.Fatalf("POST %s/%s/%s:%s failed with status %d\n", c.Negotiator, config.ServerIP, c.PublicIP, c.Port, res.StatusCode)
@@ -134,6 +131,7 @@ func (c *Client) Start() {
 		buffer := make([]byte, 1024*8)
 		var packet Packet
 		var n int
+		c.IsListeningForPacketsFromServer = true
 		for {
 			if shouldClose {
 				break
