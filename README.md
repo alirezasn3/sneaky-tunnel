@@ -7,7 +7,6 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "role": "client",
   "listeningPorts": [1194],
   "serverIP": "1.2.3.4",
-  "clientDelay": 3,
   "negotiators": [
     "http://rt.alirezasn.workers.dev"
   ]
