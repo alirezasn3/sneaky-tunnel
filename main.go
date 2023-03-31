@@ -56,7 +56,7 @@ func isValidAddress(address string) bool {
 	if err != nil {
 		return false
 	}
-	ip := net.ParseIP(address)
+	ip := net.ParseIP(addressParts[0])
 	return ip != nil
 }
 
