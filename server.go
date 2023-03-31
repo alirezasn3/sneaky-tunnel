@@ -93,7 +93,7 @@ func (s *Server) ListenForNegotiationRequests() {
 		clientIPAndPort := urlParts[len(urlParts)-1]
 
 		if isValid := isValidAddress(clientIPAndPort); !isValid {
-			w.WriteHeader(400)
+			w.WriteHeader(500)
 			s.BlockedIPs = append(s.BlockedIPs, getIPFromAddress(r.RemoteAddr))
 			log.Printf("Blocked %s\n", getIPFromAddress(r.RemoteAddr))
 			return
@@ -122,30 +122,13 @@ func (s *Server) ListenForNegotiationRequests() {
 				w.WriteHeader(400)
 			}
 		} else {
+			w.WriteHeader(500)
 			s.BlockedIPs = append(s.BlockedIPs, getIPFromAddress(r.RemoteAddr))
-			w.WriteHeader(400)
 		}
 	}))
 	if err != nil {
 		log.Panic(err)
 	}
-	// http://ip-api.com/json/94.183.9.141
-	// {
-	// 	"status":"success",
-	// 	"country":"Iran",
-	// 	"countryCode":"IR",
-	// 	"region":"23",
-	// 	"regionName":"Tehran",
-	// 	"city":"Tehran",
-	// 	"zip":"",
-	// 	"lat":35.7838,
-	// 	"lon":51.4361,
-	// 	"timezone":"Asia/Tehran",
-	// 	"isp":"SHATEL Network",
-	// 	"org":"Shatel Group",
-	// 	"as":"AS31549 Aria Shatel Company Ltd",
-	// 	"query":"94.183.9.141"
-	// }
 }
 
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
