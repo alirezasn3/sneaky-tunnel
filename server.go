@@ -11,13 +11,14 @@ import (
 
 // name User to avoid conflict with Client struct
 type User struct {
-	Connection             *net.UDPConn
-	ConnectionsToLocalApp  map[byte]*net.UDPConn
-	LastReceivedPacketTime int64
-	Ready                  bool
-	ActualAddress          *net.UDPAddr
-	ShouldClose            bool
-	Mode                   string // possible values: "tunnel", "vpn"
+	Connection                     *net.UDPConn
+	ConnectionsToLocalApp          map[byte]*net.UDPConn
+	LastReceivedPacketTime         int64
+	Ready                          bool
+	ActualAddress                  *net.UDPAddr
+	ShouldClose                    bool
+	Mode                           string // possible values: "tunnel", "vpn"
+	PacketIDToDestinationPortTable map[byte]uint16
 }
 
 type Server struct {
@@ -154,8 +155,6 @@ func (s *Server) HandleClient(clientIPAndPort string) {
 	var n int
 	var err error
 	var clientActualAddress *net.UDPAddr
-	var destinationPort uint16
-	var receivedDestinationAnnouncement = false
 
 mainLoop:
 	for {
@@ -190,11 +189,10 @@ mainLoop:
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
 				if len(packet.Payload) == 2 {
-					destinationPort = ByteSliceToUint16(packet.Payload)
-					receivedDestinationAnnouncement = true
-					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, destinationPort)
+					user.PacketIDToDestinationPortTable[packet.ID] = ByteSliceToUint16(packet.Payload)
+					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, user.PacketIDToDestinationPortTable[packet.ID])
 				} else {
-					log.Printf("Received invalid announcement packet from %s\n", user.ActualAddress)
+					log.Printf("Received invalid destination port announcement packet from %s\n", user.ActualAddress)
 				}
 			}
 			continue mainLoop
@@ -206,15 +204,15 @@ mainLoop:
 				if user.ShouldClose {
 					break mainLoop
 				}
-				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err)
+				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", user.PacketIDToDestinationPortTable[packet.ID], err)
 				user.ShouldClose = true
 				break mainLoop
 			}
 		} else {
-			if !receivedDestinationAnnouncement {
+			if _, ok := user.PacketIDToDestinationPortTable[packet.ID]; !ok {
 				continue
 			}
-			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", destinationPort))
+			serviceAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", user.PacketIDToDestinationPortTable[packet.ID]))
 			user.ConnectionsToLocalApp[packet.ID], err = net.DialUDP("udp", nil, serviceAddress)
 			if err != nil {
 				if user.ShouldClose {
@@ -233,7 +231,7 @@ mainLoop:
 				if user.ShouldClose {
 					break mainLoop
 				}
-				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", destinationPort, err)
+				log.Printf("Error writing packet to 0.0.0.0:%d\n%s\n", user.PacketIDToDestinationPortTable[packet.ID], err)
 				user.ShouldClose = true
 				break mainLoop
 			}
