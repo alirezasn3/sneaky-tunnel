@@ -18,6 +18,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ## sample config.json for server
 ```json
 {
-  "role": "server"
+  "role": "server",
+  "keepAliveInterval": [5, 20]
 }
 ```

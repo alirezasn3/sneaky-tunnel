@@ -51,7 +51,6 @@ func (s *Server) Start() {
 				}
 			}
 			log.Println()
-			log.Printf("Hourly check, %d active connections:\n", len(s.ServerToClientConnections))
 			for clientIPAndPort := range s.ServerToClientConnections {
 				log.Printf("%s\n", clientIPAndPort)
 			}
@@ -112,7 +111,7 @@ func (s *Server) Start() {
 			if err != nil {
 				log.Panic(err)
 			}
-			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn)}
+			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn), PacketIDToDestinationPortTable: make(map[byte]uint16)}
 			w.Write([]byte(getPortFromAddress(conn.LocalAddr().String())))
 			go s.HandleClient(clientIPAndPort)
 		} else if r.Method == "POST" {
