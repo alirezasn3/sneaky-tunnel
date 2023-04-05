@@ -97,7 +97,11 @@ func init() {
 				d := net.Dialer{
 					Timeout: time.Second * 10,
 				}
-				return d.DialContext(ctx, "udp", config.Resolver+":53")
+				if config.Resolver == "" {
+					return d.DialContext(ctx, "udp", "8.8.8.8"+":53")
+				} else {
+					return d.DialContext(ctx, "udp", config.Resolver+":53")
+				}
 			},
 		},
 	}
