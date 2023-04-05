@@ -20,11 +20,11 @@ var logFile *os.File
 var httpClient *http.Client
 
 type Config struct {
-	Role           string   `json:"role"`
-	ListeningPorts []uint16 `json:"listeningPorts"`
-	ServerIP       string   `json:"serverIP"`
-	Negotiators    []string `json:"negotiators"`
-	Resolver       string   `json:"resolver"`
+	Role         string   `json:"role"`
+	ServicePorts []uint16 `json:"servicePorts"`
+	ServerIP     string   `json:"serverIP"`
+	Negotiators  []string `json:"negotiators"`
+	Resolver     string   `json:"resolver"`
 }
 
 func resolveAddress(adress string) *net.UDPAddr {

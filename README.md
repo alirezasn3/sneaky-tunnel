@@ -5,7 +5,7 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
 ```json
 {
   "role": "client",
-  "listeningPorts": [1194],
+  "servicePorts": [1194],
   "serverIP": "1.2.3.4",
   "resolver": "1.1.1.1",
   "negotiators": [

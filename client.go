@@ -164,7 +164,7 @@ func (c *Client) Start() {
 
 	c.AskServerToSendDummyPacket()
 
-	for _, servicePort := range config.ListeningPorts {
+	for _, servicePort := range config.ServicePorts {
 		go func(servicePort uint16) {
 			serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
 			serviceConnection, err := net.ListenUDP("udp4", serviceListenAddress)
