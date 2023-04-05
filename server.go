@@ -189,16 +189,16 @@ mainLoop:
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
 				if user.Mode != "" {
-					if len(packet.Payload) == 2 {
+					if len(packet.Payload) >= 2 {
 						user.PacketIDToDestinationPortTable[packet.ID] = ByteSliceToUint16(packet.Payload)
 						log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, user.PacketIDToDestinationPortTable[packet.ID])
 					} else {
 						log.Printf("Received invalid destination port announcement packet from %s\n", user.ActualAddress)
 					}
 				} else {
-					log.Println("Received distination port announcement packet before mode announcement packet from %s\n", user.ActualAddress)
+					log.Printf("Received distination port announcement packet before mode announcement packet from %s\n", user.ActualAddress)
 				}
-			} else if packet.Flags == 6 {
+			} else if packet.Flags == 6 { // mode announcement
 				if len(packet.Payload) >= 1 {
 					if packet.Payload[0] == 1 {
 						user.Mode = "tunnel"
