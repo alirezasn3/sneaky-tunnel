@@ -15,7 +15,7 @@ type Packet struct {
 }
 
 func (p *Packet) EncodePacket() []byte {
-	p.Buffer = p.Buffer[:0]
+	p.Buffer = []byte{}
 	p.Buffer = append(p.Buffer, p.Flags)
 	p.Buffer = append(p.Buffer, p.ID)
 	p.Buffer = append(p.Buffer, p.Payload...)
@@ -33,6 +33,6 @@ func ByteSliceToUint16(byteSlice []byte) uint16 {
 }
 
 func Uint16ToByteSlice(n uint16) []byte {
-	temp := make([]byte, 2)
+	temp := []byte{}
 	return append(temp, byte(n), byte(n>>8))
 }

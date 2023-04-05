@@ -164,8 +164,6 @@ mainLoop:
 			break mainLoop
 		}
 
-		log.Printf("read %d bytes\n", n)
-
 		user.LastReceivedPacketTime = time.Now().Unix()
 
 		packet.DecodePacket(buffer[:n])
