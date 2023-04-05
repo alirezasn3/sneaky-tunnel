@@ -50,11 +50,6 @@ func (s *Server) Start() {
 					user.ShouldClose = true
 				}
 			}
-			log.Println()
-			for clientIPAndPort := range s.ServerToClientConnections {
-				log.Printf("%s\n", clientIPAndPort)
-			}
-			log.Println()
 		}
 	}()
 
@@ -169,10 +164,13 @@ mainLoop:
 			break mainLoop
 		}
 
+		log.Printf("read %d bytes\n", n)
+
 		user.LastReceivedPacketTime = time.Now().Unix()
 
-		// handle flags
 		packet.DecodePacket(buffer[:n])
+
+		// handle flags
 		if packet.Flags > 0 {
 			if packet.Flags == 1 { // dummy
 				user.Ready = true
