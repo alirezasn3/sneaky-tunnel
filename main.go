@@ -20,11 +20,14 @@ var logFile *os.File
 var httpClient *http.Client
 
 type Config struct {
-	Role         string   `json:"role"`
-	ServicePorts []uint16 `json:"servicePorts"`
-	ServerIP     string   `json:"serverIP"`
-	Negotiators  []string `json:"negotiators"`
-	Resolver     string   `json:"resolver"`
+	Role              string   `json:"role"`
+	ServicePorts      []uint16 `json:"servicePorts"`
+	ServerIP          string   `json:"serverIP"`
+	Negotiators       []string `json:"negotiators"`
+	Resolver          string   `json:"resolver"`
+	TunInterface      string   `json:"tunInterface"`
+	Mode              string   `json:"mode"`
+	KeepAliveInterval []int    `json:"keepAliveInterval"`
 }
 
 func resolveAddress(adress string) *net.UDPAddr {
@@ -133,6 +136,6 @@ func main() {
 		c.OpenPortAndSendDummyPacket()
 		c.Start()
 	} else if config.Role == "server" {
-		(&Server{}).ListenForNegotiationRequests()
+		(&Server{}).Start()
 	}
 }

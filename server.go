@@ -17,6 +17,7 @@ type User struct {
 	Ready                  bool
 	ActualAddress          *net.UDPAddr
 	ShouldClose            bool
+	Mode                   string // possible values: "tunnel", "vpn"
 }
 
 type Server struct {
@@ -33,7 +34,7 @@ func (s *Server) IsBlockedIP(ip string) bool {
 	return false
 }
 
-func (s *Server) ListenForNegotiationRequests() {
+func (s *Server) Start() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
@@ -113,7 +114,7 @@ func (s *Server) ListenForNegotiationRequests() {
 			}
 			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn)}
 			w.Write([]byte(getPortFromAddress(conn.LocalAddr().String())))
-			go s.HandleClientPackets(clientIPAndPort)
+			go s.HandleClient(clientIPAndPort)
 		} else if r.Method == "POST" {
 			if _, ok := s.ServerToClientConnections[clientIPAndPort]; ok {
 				go s.SendDummyPacket(clientIPAndPort)
@@ -145,7 +146,7 @@ func (s *Server) SendDummyPacket(clientIPAndPort string) {
 	log.Printf("Sent dummy packet to %s\n", clientIPAndPort)
 }
 
-func (s *Server) HandleClientPackets(clientIPAndPort string) {
+func (s *Server) HandleClient(clientIPAndPort string) {
 	connectionToClient := s.ServerToClientConnections[clientIPAndPort].Connection
 	user := s.ServerToClientConnections[clientIPAndPort]
 	buffer := make([]byte, 1024*8)
