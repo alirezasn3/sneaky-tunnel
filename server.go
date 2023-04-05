@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -151,13 +150,14 @@ func (s *Server) HandleClient(clientIPAndPort string) {
 	connectionToClient := s.ServerToClientConnections[clientIPAndPort].Connection
 	user := s.ServerToClientConnections[clientIPAndPort]
 	var packet Packet
-	packet.Payload = make([]byte, 1024*8)
+	buffer := make([]byte, 1024*8)
+	var n int
 	var err error
 	var clientActualAddress *net.UDPAddr
 
 mainLoop:
 	for {
-		_, clientActualAddress, err = connectionToClient.ReadFromUDP(packet.Payload)
+		n, clientActualAddress, err = connectionToClient.ReadFromUDP(buffer)
 		if user.ShouldClose {
 			break mainLoop
 		}
@@ -173,7 +173,7 @@ mainLoop:
 		user.LastReceivedPacketTime = time.Now().Unix()
 
 		// handle flags
-		packet.DecodePacket()
+		packet.DecodePacket(buffer[:n])
 		if packet.Flags > 0 {
 			if packet.Flags == 1 { // dummy
 				user.Ready = true
@@ -237,11 +237,11 @@ mainLoop:
 
 			go func(id byte) {
 				var packet Packet
-				packet.Payload = make([]byte, (1024*8)-2)
-				packet.Buffer = bytes.NewBuffer(nil)
+				buffer := make([]byte, (1024*8)-2)
+				var n int
 				var err error
 				for {
-					_, err = connectionToLocalApp.Read(packet.Payload)
+					_, err = connectionToLocalApp.Read(buffer)
 					if err != nil {
 						if user.ShouldClose {
 							break
@@ -252,8 +252,8 @@ mainLoop:
 					}
 					packet.Flags = 0
 					packet.ID = id
-					packet.EncodePacket()
-					_, err = connectionToClient.WriteToUDP(packet.Buffer.Bytes(), clientActualAddress)
+					packet.Payload = buffer[:n]
+					_, err = connectionToClient.WriteToUDP(packet.EncodePacket(), clientActualAddress)
 					if err != nil {
 						if user.ShouldClose {
 							break

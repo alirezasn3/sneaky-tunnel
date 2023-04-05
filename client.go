@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -114,20 +113,21 @@ func (c *Client) Start() {
 
 	go func() {
 		var packet Packet
-		packet.Payload = make([]byte, 1024*8)
+		buffer := make([]byte, 1024*8)
+		var n int
 		c.IsListeningForPacketsFromServer = true
 		for {
 			if shouldClose {
 				break
 			}
-			_, err = c.ConnectionToServer.Read(packet.Payload)
+			n, err = c.ConnectionToServer.Read(buffer)
 			if err != nil {
 				if shouldClose {
 					break
 				}
 				log.Panic(err)
 			}
-			packet.DecodePacket()
+			packet.DecodePacket(buffer[:n])
 
 			c.LastReceivedPacketTime = time.Now().Unix()
 
@@ -177,15 +177,15 @@ func (c *Client) Start() {
 			log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
 
 			var packet Packet
-			packet.Buffer = bytes.NewBuffer(nil)
-			packet.Payload = make([]byte, (1024*8)-2)
 			packet.Flags = 0
+			buffer := make([]byte, (1024*8)-2)
+			var n int
 			var serviceRemoteAddress *net.UDPAddr
 			for {
 				if shouldClose {
 					break
 				}
-				_, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(packet.Payload)
+				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
 				if err != nil {
 					if shouldClose {
 						break
@@ -211,8 +211,8 @@ func (c *Client) Start() {
 					}
 					log.Printf("Sent port announcement packet to server\n")
 				}
-				packet.EncodePacket()
-				_, err = c.ConnectionToServer.Write(packet.Buffer.Bytes())
+				packet.Payload = buffer[:n]
+				_, err = c.ConnectionToServer.Write(packet.EncodePacket())
 				if err != nil {
 					if shouldClose {
 						break
@@ -223,10 +223,10 @@ func (c *Client) Start() {
 		}(servicePort)
 	}
 
-	ticker := time.NewTicker(time.Second * 15)
+	ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
 	for range ticker.C {
 		diff := time.Now().Unix() - c.LastReceivedPacketTime
-		if c.Ready && diff > 15 {
+		if c.Ready && diff > int64(config.KeepAliveInterval[1]) {
 			log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
 			shouldClose = true
 			break
