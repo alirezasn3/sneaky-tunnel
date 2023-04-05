@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -112,22 +113,21 @@ func (c *Client) Start() {
 	log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
 
 	go func() {
-		buffer := make([]byte, 1024*8)
 		var packet Packet
-		var n int
+		packet.Payload = make([]byte, 1024*8)
 		c.IsListeningForPacketsFromServer = true
 		for {
 			if shouldClose {
 				break
 			}
-			n, err = c.ConnectionToServer.Read(buffer)
+			_, err = c.ConnectionToServer.Read(packet.Payload)
 			if err != nil {
 				if shouldClose {
 					break
 				}
 				log.Panic(err)
 			}
-			packet.DecodePacket(buffer[:n])
+			packet.DecodePacket()
 
 			c.LastReceivedPacketTime = time.Now().Unix()
 
@@ -176,17 +176,16 @@ func (c *Client) Start() {
 			}
 			log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
 
-			buffer := make([]byte, (1024*8)-2)
 			var packet Packet
+			packet.Buffer = bytes.NewBuffer(nil)
+			packet.Payload = make([]byte, (1024*8)-2)
 			packet.Flags = 0
-			var encodedPacketBytes []byte
 			var serviceRemoteAddress *net.UDPAddr
-			var n int
 			for {
 				if shouldClose {
 					break
 				}
-				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
+				_, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(packet.Payload)
 				if err != nil {
 					if shouldClose {
 						break
@@ -212,9 +211,8 @@ func (c *Client) Start() {
 					}
 					log.Printf("Sent port announcement packet to server\n")
 				}
-				packet.Payload = buffer[:n]
-				encodedPacketBytes = packet.EncodePacket()
-				_, err = c.ConnectionToServer.Write(encodedPacketBytes)
+				packet.EncodePacket()
+				_, err = c.ConnectionToServer.Write(packet.Buffer.Bytes())
 				if err != nil {
 					if shouldClose {
 						break
