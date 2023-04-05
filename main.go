@@ -25,8 +25,6 @@ type Config struct {
 	ServerIP          string   `json:"serverIP"`
 	Negotiators       []string `json:"negotiators"`
 	Resolver          string   `json:"resolver"`
-	TunInterface      string   `json:"tunInterface"`
-	Mode              string   `json:"mode"`
 	KeepAliveInterval []int    `json:"keepAliveInterval"`
 }
 

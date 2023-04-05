@@ -11,8 +11,6 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "negotiators": [
     "https://sneaky-tunnel-negotiator-worker.alirezasn.workers.dev"
   ],
-  "tunInterface": "st0",
-  "mode": "both", // possible values: "tunnel", "vpn", "both"
   "keepAliveInterval": [5, 20] // send keep-alive packets every 5 seconds, disconnect after not receiving keep-alive packets after 20 seconds
 }
 ```
