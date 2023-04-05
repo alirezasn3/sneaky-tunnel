@@ -38,7 +38,7 @@ func (s *Server) Start() {
 	s.ServerToClientConnections = make(map[string]*User)
 
 	go func() {
-		ticker := time.NewTicker(time.Hour)
+		ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
 		for range ticker.C {
 			for clientIPAndPort, user := range s.ServerToClientConnections {
 				if user.ShouldClose {
@@ -60,7 +60,7 @@ func (s *Server) Start() {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(time.Second * 5)
+		ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[0]))
 		for range ticker.C {
 			for clientIPAndPort, user := range s.ServerToClientConnections {
 				if user.ShouldClose {
