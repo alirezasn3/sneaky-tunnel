@@ -113,7 +113,7 @@ func (s *Server) Start() {
 			if err != nil {
 				log.Panic(err)
 			}
-			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn)}
+			s.ServerToClientConnections[clientIPAndPort] = &User{Ready: false, ShouldClose: false, ActualAddress: nil, Connection: conn, ConnectionsToLocalApp: make(map[byte]*net.UDPConn), Mode: ""}
 			w.Write([]byte(getPortFromAddress(conn.LocalAddr().String())))
 			go s.HandleClient(clientIPAndPort)
 		} else if r.Method == "POST" {
@@ -188,11 +188,27 @@ mainLoop:
 				user.ShouldClose = true
 				break mainLoop
 			} else if packet.Flags == 4 { // destination port announcement
-				if len(packet.Payload) == 2 {
-					user.PacketIDToDestinationPortTable[packet.ID] = ByteSliceToUint16(packet.Payload)
-					log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, user.PacketIDToDestinationPortTable[packet.ID])
+				if user.Mode != "" {
+					if len(packet.Payload) == 2 {
+						user.PacketIDToDestinationPortTable[packet.ID] = ByteSliceToUint16(packet.Payload)
+						log.Printf("Received destination announcement packet with id %d for port %d\n", packet.ID, user.PacketIDToDestinationPortTable[packet.ID])
+					} else {
+						log.Printf("Received invalid destination port announcement packet from %s\n", user.ActualAddress)
+					}
 				} else {
-					log.Printf("Received invalid destination port announcement packet from %s\n", user.ActualAddress)
+					log.Println("Received distination port announcement packet before mode announcement packet from %s\n", user.ActualAddress)
+				}
+			} else if packet.Flags == 6 {
+				if len(packet.Payload) >= 1 {
+					if packet.Payload[0] == 1 {
+						user.Mode = "tunnel"
+					} else if packet.Payload[0] == 2 {
+						user.Mode = "vpn"
+					} else {
+						log.Printf("Received invalid mode announcement packet from %s\n", user.ActualAddress)
+					}
+				} else {
+					log.Printf("Received invalid mode announcement packet from %s\n", user.ActualAddress)
 				}
 			}
 			continue mainLoop

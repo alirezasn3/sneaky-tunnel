@@ -7,6 +7,7 @@ package main
 // 3 -> close connection
 // 4 -> destination port announcement
 // 5 -> keep-alive response
+// 6 -> mode announcement: check first byte of Payload: 1 -> tunnel mode, 2 -> vpn mode
 type Packet struct {
 	Payload []byte // max length : 1024*8 - 1 - 1 = 8190
 	ID      byte   // length : 1
