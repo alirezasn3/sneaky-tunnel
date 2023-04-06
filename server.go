@@ -236,7 +236,7 @@ mainLoop:
 				var n int
 				var err error
 				for {
-					_, err = connectionToLocalApp.Read(buffer)
+					n, err = connectionToLocalApp.Read(buffer)
 					if err != nil {
 						if user.ShouldClose {
 							break
