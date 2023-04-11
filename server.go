@@ -231,8 +231,8 @@ mainLoop:
 			}
 
 			go func(id byte) {
-				var packet Packet
-				buffer := make([]byte, (1024*8)-2)
+				packet := createPacket()
+				buffer := make([]byte, (1024*8)-36)
 				var n int
 				var err error
 				for {

@@ -176,9 +176,8 @@ func (c *Client) Start() {
 			}
 			log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
 
-			var packet Packet
-			packet.Flags = 0
-			buffer := make([]byte, (1024*8)-2)
+			packet := createPacket()
+			buffer := make([]byte, (1024*8)-36)
 			var n int
 			var serviceRemoteAddress *net.UDPAddr
 			for {
