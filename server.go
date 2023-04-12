@@ -232,7 +232,7 @@ mainLoop:
 
 			go func(id byte) {
 				packet := createPacket()
-				buffer := make([]byte, (1024*8)-36)
+				buffer := make([]byte, (1024*8)-2)
 				var n int
 				var err error
 				for {
