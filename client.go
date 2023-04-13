@@ -20,6 +20,8 @@ type Client struct {
 	LastReceivedPacketTime          int64
 	IsListeningForPacketsFromServer bool
 	IsFirstTry                      bool
+	ReconnectAttemps                int
+	ShouldRetry                     bool
 }
 
 func (c *Client) NegotiatePorts() {
@@ -88,174 +90,169 @@ func (c *Client) AskServerToSendDummyPacket() {
 func (c *Client) Start() {
 	c.IsFirstTry = true
 	for {
-		c.IsListeningForPacketsFromServer = false
-		c.Ready = false
+		c.ShouldRetry = false
+		c.ReconnectAttemps++
 
-		c.NegotiatePorts()
-		c.OpenPortAndSendDummyPacket()
-
-		c.ServiceAddresses = make(map[byte]*net.UDPAddr)
-		c.ServiceIDs = make(map[string]byte)
-		if c.IsFirstTry {
-			c.PacketIDToServiceListenerTable = make(map[byte]*net.UDPConn)
-		}
-
-		remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
-		tunnelListenAddress := resolveAddress("0.0.0.0:" + c.Port)
-		var err error
-		shouldClose := false
-		c.ConnectionToServer, err = net.DialUDP("udp4", tunnelListenAddress, remoteAddress)
-		if err != nil {
-			log.Panicln(err)
-		}
-		log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
-
-		go func() {
+		func() {
 			defer func() {
 				if e := recover(); e != nil {
 					log.Println("panic occurred:", e)
 				}
+				c.ShouldRetry = true
 			}()
-			var packet Packet
-			buffer := make([]byte, 1024*8)
-			var n int
-			c.IsListeningForPacketsFromServer = true
-			for {
-				if shouldClose {
-					break
-				}
-				n, err = c.ConnectionToServer.Read(buffer)
-				if err != nil {
-					if shouldClose {
-						break
-					}
-					log.Panicln(err)
-				}
-				packet.DecodePacket(buffer[:n])
 
-				c.LastReceivedPacketTime = time.Now().Unix()
+			c.IsListeningForPacketsFromServer = false
+			c.Ready = false
 
-				// handle flags
-				if packet.Flags == 1 {
-					log.Printf("Received dummy packet from server\n")
-					c.Ready = true
-					fmt.Println("READY")
-					continue
-				} else if packet.Flags == 3 {
-					log.Printf("Received close connection packet from server\n")
-					shouldClose = true
-					break
-				} else if packet.Flags == 2 {
-					_, err = c.ConnectionToServer.Write([]byte{5, 0}) // keep-alive response packet
-					if err != nil {
-						if shouldClose {
-							break
-						}
-						log.Panicln(err)
-					}
-					continue
-				}
+			c.NegotiatePorts()
+			c.OpenPortAndSendDummyPacket()
 
-				_, err = c.PacketIDToServiceListenerTable[packet.ID].WriteTo(packet.Payload, c.ServiceAddresses[packet.ID])
-				if err != nil {
-					if shouldClose {
-						break
-					}
-					log.Panicln(err)
-				}
+			c.ServiceAddresses = make(map[byte]*net.UDPAddr)
+			c.ServiceIDs = make(map[string]byte)
+			if c.IsFirstTry {
+				c.PacketIDToServiceListenerTable = make(map[byte]*net.UDPConn)
 			}
-		}()
 
-		c.AskServerToSendDummyPacket()
+			remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
+			tunnelListenAddress := resolveAddress("0.0.0.0:" + c.Port)
+			var err error
+			c.ConnectionToServer, err = net.DialUDP("udp4", tunnelListenAddress, remoteAddress)
+			if err != nil {
+				log.Panicln(err)
+			}
+			log.Printf("Listening on %s for dummy packet from %s\n", tunnelListenAddress.String(), remoteAddress.String())
 
-		for _, servicePort := range config.ServicePorts {
-			go func(servicePort uint16) {
+			go func() {
 				defer func() {
 					if e := recover(); e != nil {
 						log.Println("panic occurred:", e)
 					}
+					c.ShouldRetry = true
 				}()
-				serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
-				var serviceListener *net.UDPConn
-				var err error
-				if c.IsFirstTry {
-					serviceListener, err = net.ListenUDP("udp4", serviceListenAddress)
-					c.ServiceListeners = append(c.ServiceListeners, serviceListener)
-				} else {
-					for _, l := range c.ServiceListeners {
-						if l.LocalAddr().String() == serviceListenAddress.String() {
-							serviceListener = l
-							break
-						}
-					}
-					if serviceListener == nil {
-						log.Panicln("Failed to find previous service listener")
-					}
-				}
-				if err != nil {
-					if shouldClose {
-						return
-					}
-					log.Panicln(err)
-				}
-				log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
-
-				packet := createPacket()
-				buffer := make([]byte, (1024*8)-2)
+				var packet Packet
+				buffer := make([]byte, 1024*8)
 				var n int
-				var serviceRemoteAddress *net.UDPAddr
+				c.IsListeningForPacketsFromServer = true
 				for {
-					if shouldClose {
-						break
-					}
-					n, serviceRemoteAddress, err = serviceListener.ReadFromUDP(buffer)
+					n, err = c.ConnectionToServer.Read(buffer)
 					if err != nil {
-						if shouldClose {
-							break
-						}
 						log.Panicln(err)
 					}
-					if id, ok := c.ServiceIDs[serviceRemoteAddress.String()]; ok {
-						packet.ID = id
-					} else {
-						packet.ID = byte(len(c.ServiceIDs))
-						c.ServiceIDs[serviceRemoteAddress.String()] = packet.ID
-						c.ServiceAddresses[packet.ID] = serviceRemoteAddress
-						c.PacketIDToServiceListenerTable[packet.ID] = serviceListener
-						log.Printf("Received packet from new user at %s on service at %s with id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
-						announcementPacket := []byte{4, packet.ID}
-						announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
-						_, err := c.ConnectionToServer.Write(announcementPacket)
+					packet.DecodePacket(buffer[:n])
+
+					c.LastReceivedPacketTime = time.Now().Unix()
+
+					// handle flags
+					if packet.Flags == 1 {
+						log.Printf("Received dummy packet from server\n")
+						c.Ready = true
+						c.ReconnectAttemps = 0
+						fmt.Println("READY")
+						continue
+					} else if packet.Flags == 3 {
+						log.Printf("Received close connection packet from server\n")
+						break
+					} else if packet.Flags == 2 {
+						_, err = c.ConnectionToServer.Write([]byte{5, 0}) // keep-alive response packet
 						if err != nil {
-							if shouldClose {
-								break
-							}
 							log.Panicln(err)
 						}
-						log.Printf("Sent port announcement packet to server\n")
+						continue
 					}
-					packet.Payload = buffer[:n]
-					_, err = c.ConnectionToServer.Write(packet.EncodePacket())
+
+					_, err = c.PacketIDToServiceListenerTable[packet.ID].WriteTo(packet.Payload, c.ServiceAddresses[packet.ID])
 					if err != nil {
-						if shouldClose {
-							break
-						}
 						log.Panicln(err)
 					}
 				}
-			}(servicePort)
+			}()
+
+			c.AskServerToSendDummyPacket()
+
+			for _, servicePort := range config.ServicePorts {
+				go func(servicePort uint16) {
+					defer func() {
+						if e := recover(); e != nil {
+							log.Println("panic occurred:", e)
+						}
+						c.ShouldRetry = true
+					}()
+					serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
+					var serviceListener *net.UDPConn
+					var err error
+					if c.IsFirstTry {
+						serviceListener, err = net.ListenUDP("udp4", serviceListenAddress)
+						c.ServiceListeners = append(c.ServiceListeners, serviceListener)
+					} else {
+						for _, l := range c.ServiceListeners {
+							if l.LocalAddr().String() == serviceListenAddress.String() {
+								serviceListener = l
+								break
+							}
+						}
+						if serviceListener == nil {
+							log.Panicln("Failed to find previous service listener")
+						}
+					}
+					if err != nil {
+						log.Panicln(err)
+					}
+					log.Printf("Listening on %s for service packets\n", serviceListenAddress.String())
+
+					packet := createPacket()
+					buffer := make([]byte, (1024*8)-2)
+					var n int
+					var serviceRemoteAddress *net.UDPAddr
+					for {
+						n, serviceRemoteAddress, err = serviceListener.ReadFromUDP(buffer)
+						if err != nil {
+							log.Panicln(err)
+						}
+						if id, ok := c.ServiceIDs[serviceRemoteAddress.String()]; ok {
+							packet.ID = id
+						} else {
+							packet.ID = byte(len(c.ServiceIDs))
+							c.ServiceIDs[serviceRemoteAddress.String()] = packet.ID
+							c.ServiceAddresses[packet.ID] = serviceRemoteAddress
+							c.PacketIDToServiceListenerTable[packet.ID] = serviceListener
+							log.Printf("Received packet from new user at %s on service at %s with id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
+							announcementPacket := []byte{4, packet.ID}
+							announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
+							_, err := c.ConnectionToServer.Write(announcementPacket)
+							if err != nil {
+								log.Panicln(err)
+							}
+							log.Printf("Sent port announcement packet to server\n")
+						}
+						packet.Payload = buffer[:n]
+						_, err = c.ConnectionToServer.Write(packet.EncodePacket())
+						if err != nil {
+							log.Panicln(err)
+						}
+					}
+				}(servicePort)
+			}
+
+			ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
+			for range ticker.C {
+				if c.ShouldRetry {
+					break
+				}
+				diff := time.Now().Unix() - c.LastReceivedPacketTime
+				if c.Ready && diff > int64(config.KeepAliveInterval[1]) {
+					log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
+					break
+				}
+			}
+			c.IsFirstTry = false
+			fmt.Println("RECONNECTING")
+		}()
+
+		if c.ReconnectAttemps > 10 {
+			log.Println("Reconnect failed too many times")
+			break
 		}
 
-		ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
-		for range ticker.C {
-			diff := time.Now().Unix() - c.LastReceivedPacketTime
-			if c.Ready && diff > int64(config.KeepAliveInterval[1]) {
-				log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
-				shouldClose = true
-				break
-			}
-		}
-		c.IsFirstTry = false
-		fmt.Println("RECONNECTING")
+		time.Sleep(time.Second)
 	}
 }
