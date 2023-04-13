@@ -9,7 +9,9 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "serverIP": "1.2.3.4",
   "resolver": "1.1.1.1",
   "negotiator": "https://sneaky-tunnel-negotiator-worker.alirezasn.workers.dev",
-  "keepAliveInterval": [5, 20]
+  "keepAliveInterval": [0, 20],
+  "retryDelay": 1,
+  "retryCount": 10
 }
 ```
 

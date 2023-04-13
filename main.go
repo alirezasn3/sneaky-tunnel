@@ -24,6 +24,8 @@ type Config struct {
 	Negotiator        string   `json:"negotiator"`
 	Resolver          string   `json:"resolver"`
 	KeepAliveInterval []int    `json:"keepAliveInterval"`
+	RetryDelay        int      `json:"retryDelay"`
+	RetryCount        int      `json:"retryCount"`
 }
 
 func resolveAddress(adress string) *net.UDPAddr {

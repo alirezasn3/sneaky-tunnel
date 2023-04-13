@@ -248,11 +248,11 @@ func (c *Client) Start() {
 			fmt.Println("RECONNECTING")
 		}()
 
-		if c.ReconnectAttemps > 10 {
+		if c.ReconnectAttemps > config.RetryCount {
 			log.Println("Reconnect failed too many times")
 			break
 		}
 
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * time.Duration(config.RetryDelay))
 	}
 }
