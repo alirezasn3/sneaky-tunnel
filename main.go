@@ -8,10 +8,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -23,7 +21,7 @@ type Config struct {
 	Role              string   `json:"role"`
 	ServicePorts      []uint16 `json:"servicePorts"`
 	ServerIP          string   `json:"serverIP"`
-	Negotiators       []string `json:"negotiators"`
+	Negotiator        string   `json:"negotiator"`
 	Resolver          string   `json:"resolver"`
 	KeepAliveInterval []int    `json:"keepAliveInterval"`
 }
@@ -120,19 +118,7 @@ func main() {
 	defer logFile.Close()
 
 	if config.Role == "client" {
-		var c Client
-
-		sigs := make(chan os.Signal, 1)
-		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-		go func(*Client) {
-			<-sigs
-			c.CleanUp()
-			os.Exit(0)
-		}(&c)
-		c.SelectNegotiator()
-		c.NegotiatePorts()
-		c.OpenPortAndSendDummyPacket()
-		c.Start()
+		(&Client{}).Start()
 	} else if config.Role == "server" {
 		(&Server{}).Start()
 	}

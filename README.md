@@ -8,10 +8,8 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "servicePorts": [1194],
   "serverIP": "1.2.3.4",
   "resolver": "1.1.1.1",
-  "negotiators": [
-    "https://sneaky-tunnel-negotiator-worker.alirezasn.workers.dev"
-  ],
-  "keepAliveInterval": [5, 20] // send keep-alive packets every 5 seconds, disconnect after not receiving keep-alive packets after 20 seconds
+  "negotiator": "https://sneaky-tunnel-negotiator-worker.alirezasn.workers.dev",
+  "keepAliveInterval": [5, 20]
 }
 ```
 
