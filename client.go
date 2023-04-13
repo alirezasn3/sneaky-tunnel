@@ -21,7 +21,6 @@ type Client struct {
 	IsListeningForPacketsFromServer bool
 	IsFirstTry                      bool
 	ReconnectAttemps                int
-	ShouldRetry                     bool
 }
 
 func (c *Client) NegotiatePorts() {
@@ -90,15 +89,11 @@ func (c *Client) AskServerToSendDummyPacket() {
 func (c *Client) Start() {
 	c.IsFirstTry = true
 	for {
-		c.ShouldRetry = false
-		c.ReconnectAttemps++
-
 		func() {
 			defer func() {
 				if e := recover(); e != nil {
 					log.Println("panic occurred:", e)
 				}
-				c.ShouldRetry = true
 			}()
 
 			c.IsListeningForPacketsFromServer = false
@@ -127,7 +122,6 @@ func (c *Client) Start() {
 					if e := recover(); e != nil {
 						log.Println("panic occurred:", e)
 					}
-					c.ShouldRetry = true
 				}()
 				var packet Packet
 				buffer := make([]byte, 1024*8)
@@ -175,7 +169,6 @@ func (c *Client) Start() {
 						if e := recover(); e != nil {
 							log.Println("panic occurred:", e)
 						}
-						c.ShouldRetry = true
 					}()
 					serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
 					var serviceListener *net.UDPConn
@@ -235,9 +228,6 @@ func (c *Client) Start() {
 
 			ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
 			for range ticker.C {
-				if c.ShouldRetry {
-					break
-				}
 				diff := time.Now().Unix() - c.LastReceivedPacketTime
 				if c.Ready && diff > int64(config.KeepAliveInterval[1]) {
 					log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
@@ -245,14 +235,15 @@ func (c *Client) Start() {
 				}
 			}
 			c.IsFirstTry = false
-			fmt.Println("RECONNECTING")
 		}()
 
-		if c.ReconnectAttemps > config.RetryCount {
+		if c.ReconnectAttemps == config.RetryCount {
 			log.Println("Reconnect failed too many times")
 			break
 		}
 
 		time.Sleep(time.Second * time.Duration(config.RetryDelay))
+		fmt.Println("RECONNECTING")
+		c.ReconnectAttemps++
 	}
 }
