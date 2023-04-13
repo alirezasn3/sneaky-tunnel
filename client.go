@@ -15,7 +15,7 @@ type Client struct {
 	ServiceIDs                      map[string]byte
 	Ready                           bool
 	ConnectionToServer              *net.UDPConn
-	LocalListeners                  map[byte]*net.UDPConn
+	ServiceListeners                map[byte]*net.UDPConn
 	LastReceivedPacketTime          int64
 	IsListeningForPacketsFromServer bool
 }
@@ -89,7 +89,7 @@ func (c *Client) Start() {
 
 	c.ServiceAddresses = make(map[byte]*net.UDPAddr)
 	c.ServiceIDs = make(map[string]byte)
-	c.LocalListeners = make(map[byte]*net.UDPConn)
+	c.ServiceListeners = make(map[byte]*net.UDPConn)
 
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	tunnelListenAddress := resolveAddress("0.0.0.0:" + c.Port)
@@ -142,7 +142,7 @@ func (c *Client) Start() {
 				continue
 			}
 
-			_, err = c.LocalListeners[packet.ID].WriteTo(packet.Payload, c.ServiceAddresses[packet.ID])
+			_, err = c.ServiceListeners[packet.ID].WriteTo(packet.Payload, c.ServiceAddresses[packet.ID])
 			if err != nil {
 				if shouldClose {
 					break
@@ -157,7 +157,7 @@ func (c *Client) Start() {
 	for _, servicePort := range config.ServicePorts {
 		go func(servicePort uint16) {
 			serviceListenAddress := resolveAddress(fmt.Sprintf("0.0.0.0:%d", servicePort))
-			serviceConnection, err := net.ListenUDP("udp4", serviceListenAddress)
+			serviceListener, err := net.ListenUDP("udp4", serviceListenAddress)
 			if err != nil {
 				if shouldClose {
 					return
@@ -174,7 +174,7 @@ func (c *Client) Start() {
 				if shouldClose {
 					break
 				}
-				n, serviceRemoteAddress, err = serviceConnection.ReadFromUDP(buffer)
+				n, serviceRemoteAddress, err = serviceListener.ReadFromUDP(buffer)
 				if err != nil {
 					if shouldClose {
 						break
@@ -187,7 +187,7 @@ func (c *Client) Start() {
 					packet.ID = byte(len(c.ServiceIDs))
 					c.ServiceIDs[serviceRemoteAddress.String()] = packet.ID
 					c.ServiceAddresses[packet.ID] = serviceRemoteAddress
-					c.LocalListeners[packet.ID] = serviceConnection
+					c.ServiceListeners[packet.ID] = serviceListener
 					log.Printf("Received packet from new user at %s on service at %s with id of %d\n", serviceRemoteAddress.String(), serviceListenAddress.String(), packet.ID)
 					announcementPacket := []byte{4, packet.ID}
 					announcementPacket = append(announcementPacket, Uint16ToByteSlice(servicePort)...)
@@ -220,10 +220,5 @@ func (c *Client) Start() {
 			shouldClose = true
 			break
 		}
-	}
-
-	c.ConnectionToServer.Close()
-	for _, conn := range c.LocalListeners {
-		conn.Close()
 	}
 }
