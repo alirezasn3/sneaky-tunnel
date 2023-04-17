@@ -57,7 +57,7 @@ func (c *Client) NegotiatePorts() {
 }
 
 func (c *Client) OpenPortAndSendDummyPacket() {
-	listenAddress := resolveAddress("0.0.0.0:0" + c.Port)
+	listenAddress := resolveAddress("0.0.0.0:" + c.Port)
 	remoteAddress := resolveAddress(config.ServerIP + ":" + c.ServerPort)
 	conn, err := net.DialUDP("udp4", listenAddress, remoteAddress)
 	if err != nil {
