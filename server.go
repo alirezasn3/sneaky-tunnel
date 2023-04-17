@@ -129,7 +129,6 @@ func (s *Server) Start() {
 func (s *Server) SendDummyPacket(clientIPAndPort string) {
 	if s.ServerToClientConnections[clientIPAndPort].ActualAddress == nil {
 		s.ServerToClientConnections[clientIPAndPort].ActualAddress = resolveAddress(clientIPAndPort)
-
 	}
 	_, err := s.ServerToClientConnections[clientIPAndPort].Connection.WriteToUDP([]byte{1, 0}, s.ServerToClientConnections[clientIPAndPort].ActualAddress)
 	if err != nil {
