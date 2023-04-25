@@ -26,6 +26,7 @@ type Config struct {
 	KeepAliveInterval []int    `json:"keepAliveInterval"`
 	RetryDelay        int      `json:"retryDelay"`
 	RetryCount        int      `json:"retryCount"`
+	SerivceTimeout    int      `json:"serviceTimeout"`
 }
 
 func resolveAddress(adress string) *net.UDPAddr {

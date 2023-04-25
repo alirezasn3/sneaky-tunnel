@@ -9,18 +9,38 @@ import (
 )
 
 type Client struct {
-	ServerPort                      string
-	Port                            string
-	ServiceAddresses                map[byte]*net.UDPAddr
-	ServiceListeners                []*net.UDPConn
-	ServiceIDs                      map[string]byte
-	Ready                           bool
-	ConnectionToServer              *net.UDPConn
-	PacketIDToServiceListenerTable  map[byte]*net.UDPConn
-	LastReceivedPacketTime          int64
-	IsListeningForPacketsFromServer bool
-	IsFirstTry                      bool
-	ReconnectAttemps                int
+	ServerPort                          string
+	Port                                string
+	ServiceAddresses                    map[byte]*net.UDPAddr
+	ServiceListeners                    []*net.UDPConn
+	ServiceIDs                          map[string]byte
+	Ready                               bool
+	ConnectionToServer                  *net.UDPConn
+	PacketIDToServiceListenerTable      map[byte]*net.UDPConn
+	LastReceivedPacketFromServer        int64
+	IsListeningForPacketsFromServer     bool
+	IsFirstTry                          bool
+	ReconnectAttemps                    int
+	LastCommunicatedPacketsWithServices map[byte]int64
+}
+
+func (c *Client) AssignPacketID() byte {
+	for remoteAddress, id := range c.ServiceIDs {
+		diff := time.Now().Unix() - c.LastCommunicatedPacketsWithServices[id]
+		if c.Ready && diff > int64(config.SerivceTimeout) {
+			log.Printf("Did not communicate any packet with %s for %d seconds, closing connection\n", remoteAddress, diff)
+			delete(c.LastCommunicatedPacketsWithServices, id)
+			delete(c.ServiceIDs, remoteAddress)
+			delete(c.PacketIDToServiceListenerTable, id)
+		}
+	}
+	var id int = 0
+	for ; id < 256; id++ {
+		if _, ok := c.PacketIDToServiceListenerTable[byte(id)]; !ok {
+			break
+		}
+	}
+	return byte(id)
 }
 
 func (c *Client) NegotiatePorts() {
@@ -102,6 +122,7 @@ func (c *Client) Start() {
 			c.NegotiatePorts()
 			c.OpenPortAndSendDummyPacket()
 
+			c.LastCommunicatedPacketsWithServices = make(map[byte]int64)
 			c.ServiceAddresses = make(map[byte]*net.UDPAddr)
 			c.ServiceIDs = make(map[string]byte)
 			if c.IsFirstTry {
@@ -134,7 +155,7 @@ func (c *Client) Start() {
 					}
 					packet.DecodePacket(buffer[:n])
 
-					c.LastReceivedPacketTime = time.Now().Unix()
+					c.LastReceivedPacketFromServer = time.Now().Unix()
 
 					// handle flags
 					if packet.Flags == 1 {
@@ -158,6 +179,7 @@ func (c *Client) Start() {
 					if err != nil {
 						log.Panicln(err)
 					}
+					c.LastCommunicatedPacketsWithServices[packet.ID] = time.Now().Unix()
 				}
 			}()
 
@@ -203,8 +225,10 @@ func (c *Client) Start() {
 						}
 						if id, ok := c.ServiceIDs[serviceRemoteAddress.String()]; ok {
 							packet.ID = id
+							c.LastCommunicatedPacketsWithServices[id] = time.Now().Unix()
 						} else {
-							packet.ID = byte(len(c.ServiceIDs))
+							packet.ID = c.AssignPacketID()
+							c.LastCommunicatedPacketsWithServices[packet.ID] = time.Now().Unix()
 							c.ServiceIDs[serviceRemoteAddress.String()] = packet.ID
 							c.ServiceAddresses[packet.ID] = serviceRemoteAddress
 							c.PacketIDToServiceListenerTable[packet.ID] = serviceListener
@@ -228,7 +252,7 @@ func (c *Client) Start() {
 
 			ticker := time.NewTicker(time.Second * time.Duration(config.KeepAliveInterval[1]))
 			for range ticker.C {
-				diff := time.Now().Unix() - c.LastReceivedPacketTime
+				diff := time.Now().Unix() - c.LastReceivedPacketFromServer
 				if c.Ready && diff > int64(config.KeepAliveInterval[1]) {
 					log.Printf("Did not receive keep-alive packet from server for %d seconds, closing connection\n", diff)
 					break

@@ -11,7 +11,8 @@ This is reversed UDP tunnel, meaning the server will initiate the connection. Th
   "negotiator": "https://sneaky-tunnel-negotiator-worker.alirezasn.workers.dev",
   "keepAliveInterval": [0, 20],
   "retryDelay": 1,
-  "retryCount": 10
+  "retryCount": 10,
+  "serviceTimeout": 60
 }
 ```
 
