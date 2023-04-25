@@ -29,6 +29,7 @@ func (c *Client) AssignPacketID() byte {
 		diff := time.Now().Unix() - c.LastCommunicatedPacketsWithServices[id]
 		if c.Ready && diff > int64(config.SerivceTimeout) {
 			log.Printf("Did not communicate any packet with %s for %d seconds, closing connection\n", remoteAddress, diff)
+			c.ConnectionToServer.Write([]byte{6, byte(id)})
 			delete(c.LastCommunicatedPacketsWithServices, id)
 			delete(c.ServiceIDs, remoteAddress)
 			delete(c.PacketIDToServiceListenerTable, id)

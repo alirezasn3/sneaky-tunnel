@@ -187,6 +187,9 @@ mainLoop:
 				} else {
 					log.Printf("Received invalid destination port announcement packet from %s\n", user.ActualAddress)
 				}
+			} else if packet.Flags == 6 { // free id
+				delete(user.ConnectionsToLocalApp, packet.ID)
+				delete(user.PacketIDToDestinationPortTable, packet.ID)
 			}
 			continue mainLoop
 		}
