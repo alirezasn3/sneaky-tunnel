@@ -1,4 +1,4 @@
-# sneaky-tunnel
+# Sneaky Tunnel
 
 This is reversed UDP tunnel, meaning the server will initiate the connection. The port on client side is opened using udp hole punching.
 
